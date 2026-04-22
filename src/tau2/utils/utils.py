@@ -1,5 +1,4 @@
 import hashlib
-import importlib.metadata
 import json
 import os
 import subprocess
@@ -27,6 +26,16 @@ else:
     DATA_DIR = SOURCE_DIR / "data"
     logger.info(f"Using data directory from source: {DATA_DIR}")
 
+
+FLEX_OUTPUT_DIR_ENV = os.getenv("FLEX_OUTPUT_DIR")
+
+if not FLEX_OUTPUT_DIR_ENV:
+    FLEX_OUTPUT_DIR = DATA_DIR
+else:
+    FLEX_OUTPUT_DIR = Path(FLEX_OUTPUT_DIR_ENV)
+logger.info(f"FLEX_OUTPUT_DIR: {FLEX_OUTPUT_DIR}")
+
+
 # Check if data directory exists and is accessible
 if not DATA_DIR.exists():
     logger.warning(f"Data directory does not exist: {DATA_DIR}")
@@ -53,39 +62,19 @@ def show_dict_diff(dict1: dict, dict2: dict) -> str:
     return diff
 
 
-def get_now(use_compact_format: bool = False) -> str:
+def get_now() -> str:
     """
-    Returns the current date and time.
-
-    Args:
-        use_compact_format: If True, returns format YYYYMMDD_HHMMSS.
-                          If False, returns ISO format (YYYY-MM-DDTHH:MM:SS.ffffff).
+    Returns the current date and time in the format YYYYMMDD_HHMMSS.
     """
     now = datetime.now()
-    return format_time(now, use_compact_format=use_compact_format)
+    return format_time(now)
 
 
-def format_time(time: datetime, use_compact_format: bool = True) -> str:
+def format_time(time: datetime) -> str:
     """
-    Format the time.
-
-    Args:
-        time: The datetime object to format.
-        use_compact_format: If True, returns format YYYYMMDD_HHMMSS.
-                          If False, returns ISO format (YYYY-MM-DDTHH:MM:SS.ffffff).
+    Format the time in the format YYYYMMDD_HHMMSS.
     """
-    if use_compact_format:
-        return time.strftime("%Y%m%d_%H%M%S")
-    else:
-        return time.isoformat()
-
-
-def get_tau2_version() -> str:
-    """Get the installed tau2 package version."""
-    try:
-        return importlib.metadata.version("tau2")
-    except importlib.metadata.PackageNotFoundError:
-        return "dev"
+    return time.isoformat()
 
 
 def get_commit_hash() -> str:

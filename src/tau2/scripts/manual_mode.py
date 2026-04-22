@@ -24,7 +24,7 @@ def disable_logging():
     logger.remove()
     # Add a handler that does nothing (suppresses all logs)
     logger.add(lambda msg: None, level="CRITICAL")
-
+    
     # Disable standard Python logging
     logging.getLogger().setLevel(logging.CRITICAL)
     # Disable all loggers to be extra sure
@@ -39,7 +39,7 @@ def enable_logging():
     logger.remove()
     # Re-add default console handler
     logger.add(lambda msg: print(msg), level="INFO")
-
+    
     # Re-enable standard Python logging
     logging.getLogger().setLevel(logging.INFO)
     for name in logging.root.manager.loggerDict:
@@ -265,22 +265,14 @@ def format_observation(observation: str, step_count: int):
 
 
 def get_user_action(
-    env,
-    step_count: int,
-    tools,
-    policy: str,
-    task=None,
-    solo_mode=False,
-    play_as_user=False,
+    env, step_count: int, tools, policy: str, task=None, solo_mode=False, play_as_user=False
 ) -> str:
     """Get the next action from the user."""
     role_text = "user" if play_as_user else "agent"
     console.print(
         f"\n[bold cyan] STEP {step_count} - Enter your action as the {role_text}:[/bold cyan]"
     )
-    help_text = (
-        "[dim](Type 'quit' to exit, 'help' for commands, 'tools' to see available tools"
-    )
+    help_text = "[dim](Type 'quit' to exit, 'help' for commands, 'tools' to see available tools"
     if play_as_user:
         help_text += ", 'scenario' to see your goal, or add '###STOP###' to end"
     else:
@@ -309,34 +301,22 @@ def get_user_action(
 
             help_content += "\n\n[bold]💡 Tips:[/bold]"
             if play_as_user:
-                help_content += (
-                    "\n• You are the customer - make requests and ask questions"
-                )
+                help_content += "\n• You are the customer - make requests and ask questions"
                 help_content += "\n• Be natural and conversational"
                 help_content += "\n• The automated agent will respond to you"
                 help_content += "\n• Type 'scenario' to remind yourself of your goal"
                 help_content += "\n• You can also use user tools (if available) by typing their names and parameters"
                 help_content += "\n• Example: [cyan]check_balance()[/cyan]"
                 help_content += "\n\n[bold]🛑 To end the conversation:[/bold]"
-                help_content += (
-                    "\n• Add [cyan]###STOP###[/cyan] to signal you're satisfied"
-                )
-                help_content += (
-                    "\n• Example: [cyan]Thanks, that's perfect! ###STOP###[/cyan]"
-                )
-                help_content += (
-                    "\n• Or add [cyan]###TRANSFER###[/cyan] to request a human agent"
-                )
+                help_content += "\n• Add [cyan]###STOP###[/cyan] to signal you're satisfied"
+                help_content += "\n• Example: [cyan]Thanks, that's perfect! ###STOP###[/cyan]"
+                help_content += "\n• Or add [cyan]###TRANSFER###[/cyan] to request a human agent"
                 help_content += "\n• Or add [cyan]###OUT-OF-SCOPE###[/cyan] if request is out of scope"
             else:
-                help_content += (
-                    "\n• You can use tools by typing their names and parameters"
-                )
-                help_content += '\n• Example: [cyan]search_flights(origin="NYC", destination="LAX")[/cyan]'
+                help_content += "\n• You can use tools by typing their names and parameters"
+                help_content += "\n• Example: [cyan]search_flights(origin=\"NYC\", destination=\"LAX\")[/cyan]"
                 if solo_mode:
-                    help_content += (
-                        "\n• In solo mode, work through the ticket step by step"
-                    )
+                    help_content += "\n• In solo mode, work through the ticket step by step"
                 else:
                     help_content += "\n• Be conversational and helpful to the user"
                 help_content += "\n• Follow the agent policy guidelines"
@@ -417,7 +397,7 @@ def display_role_selection():
 
 def display_mode_selection():
     """Display mode selection (solo or normal) and let user choose.
-
+    
     Note: This is only available when playing as the agent.
     """
     mode_panel = Panel(
@@ -505,9 +485,7 @@ def display_ticket(task):
 def display_user_scenario(task):
     """Display the user scenario/instructions when playing as user."""
     if not hasattr(task, "user_scenario") or not task.user_scenario:
-        console.print(
-            Panel("No user scenario available for this task.", style="yellow")
-        )
+        console.print(Panel("No user scenario available for this task.", style="yellow"))
         return
 
     # Get the user scenario content
@@ -603,9 +581,7 @@ This allows you to interact with the simulation as if you were the AI agent.
             # Playing as user - configure the automated agent
             agent_llm = get_agent_llm_config()
             if agent_llm:
-                console.print(
-                    f"\n[green]✅ Agent LLM:[/green] [bold]{agent_llm}[/bold]"
-                )
+                console.print(f"\n[green]✅ Agent LLM:[/green] [bold]{agent_llm}[/bold]")
             else:
                 console.print(f"\n[green]✅ Agent LLM:[/green] [bold]Default[/bold]")
         else:
@@ -613,22 +589,21 @@ This allows you to interact with the simulation as if you were the AI agent.
             if not solo_mode:
                 user_llm = get_user_llm_config()
                 if user_llm:
-                    console.print(
-                        f"\n[green]✅ User LLM:[/green] [bold]{user_llm}[/bold]"
-                    )
+                    console.print(f"\n[green]✅ User LLM:[/green] [bold]{user_llm}[/bold]")
                 else:
                     console.print(f"\n[green]✅ User LLM:[/green] [bold]Default[/bold]")
 
         # Step 7: Create appropriate GymEnv instance
         with console.status("[bold green]Initializing environment...", spinner="dots"):
             if play_as_user:
-                env = UserGymEnv(domain=domain, task_id=task.id, agent_llm=agent_llm)
-            else:
-                env = AgentGymEnv(
+                env = UserGymEnv(
                     domain=domain,
                     task_id=task.id,
-                    solo_mode=solo_mode,
-                    user_llm=user_llm,
+                    agent_llm=agent_llm
+                )
+            else:
+                env = AgentGymEnv(
+                    domain=domain, task_id=task.id, solo_mode=solo_mode, user_llm=user_llm
                 )
 
         # Step 8: Reset environment and get initial observation
@@ -641,19 +616,17 @@ This allows you to interact with the simulation as if you were the AI agent.
             agent_tools = info.get("agent_tools", [])
             user_tools = info.get("user_tools", [])
             policy = info.get("policy", "")
-
+            
             console.print("\n[bold blue]🤖 Agent Tools:[/bold blue]")
             display_tools(agent_tools)
-
+            
             if user_tools:
                 console.print("\n[bold green]👤 Your Tools (as User):[/bold green]")
                 display_tools(user_tools)
             else:
                 console.print("\n[dim]👤 No user tools available for this domain[/dim]")
-
-            console.print(
-                "\n[bold yellow]📋 Agent Policy (for reference):[/bold yellow]"
-            )
+            
+            console.print("\n[bold yellow]📋 Agent Policy (for reference):[/bold yellow]")
             display_policy(policy)
         else:
             # When playing as agent, show agent tools and policy
@@ -680,9 +653,7 @@ This allows you to interact with the simulation as if you were the AI agent.
 
             # Get user action
             current_tools = user_tools if play_as_user else tools
-            action = get_user_action(
-                env, step_count, current_tools, policy, task, solo_mode, play_as_user
-            )
+            action = get_user_action(env, step_count, current_tools, policy, task, solo_mode, play_as_user)
             if action is None:
                 console.print("[yellow]👋 Exiting simulation...[/yellow]")
                 break

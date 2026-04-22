@@ -1,0 +1,353 @@
+# ローカライズ検討メモ
+#
+# 翻訳時に「日本風に変更したい」箇所と、変更した場合のsrc/への影響をまとめる。
+#
+# ステータス:
+#   【日本語化完了】  - src/配下・data/配下ともに対応済み
+#   【一部完了】      - テンプレートや一部の値は対応済みだが、残作業あり
+#   【未着手】        - 検討のみ、変更なし
+
+# ============================================================
+# 完了
+# ============================================================
+completed:
+  - file: src/tau2/agent/llm_agent.py
+    section: "AGENT_INSTRUCTION"
+    current: "日本語ユーザー / 日本語のメッセージ"
+    note: "【日本語化完了】エージェント指示文に日本語を明示する記述を2箇所追加"
+    translations:
+      - en: "a customer service agent that helps the user"
+        ja: "日本語ユーザーをサポートするカスタマーサービスエージェント"
+      - en: "Send a message to the user."
+        ja: "ユーザーに日本語のメッセージを送信する。"
+
+  - file: main_policy.md / data_model.py
+    section: "ドメインの基本情報 > 顧客 > goodwill credit"
+    current: "お詫びポイント"
+    note: "【日本語化完了】main_policy.mdの記載とdata_model.pyのField descriptionを日本語化済み。フィールド名(goodwill_credit_used_this_year)とdb.tomlのキー名は内部用のため維持"
+    translations:
+      - en: "goodwill credit usage for the year"
+        ja: "お詫びポイント利用状況"
+      - en: "Amount of goodwill credit used in the current calendar year"
+        ja: "今年度のお詫びポイント利用額"
+
+  - file: main_policy.md
+    section: "テレコムエージェントポリシー > 現在時刻"
+    current: "2025-02-25 12:08:00 JST"
+    note: "【日本語化完了】タイムゾーンを EST → JST に変更済み"
+    translations:
+      - en: "2025-02-25 12:08:00 EST"
+        ja: "2025-02-25 12:08:00 JST"
+
+  - file: main_policy.md
+    section: "ドメインの基本情報 > 顧客 > アカウントステータス"
+    current: "Active, Suspended, Pending Verification, Closed"
+    note: "【日本語化完了】AccountStatus Enum（data_model.py）、db.tomlの全顧客データともに対応済み"
+    translations:
+      - en: "Active"
+        ja: "有効"
+      - en: "Suspended"
+        ja: "利用停止"
+      - en: "Pending Verification"
+        ja: "確認待ち"
+      - en: "Closed"
+        ja: "解約済み"
+
+  - file: main_policy.md
+    section: "ドメインの基本情報 > 回線 > 回線ステータス"
+    current: "Active, Suspended, Pending Activation, Closed"
+    note: "【日本語化完了】LineStatus Enum（data_model.py）、db.tomlの全回線データともに対応済み。コード側はEnum member名で参照"
+    translations:
+      - en: "Active"
+        ja: "有効"
+      - en: "Suspended"
+        ja: "利用停止"
+      - en: "Pending Activation"
+        ja: "有効化待ち"
+      - en: "Closed"
+        ja: "解約済み"
+
+  - file: main_policy.md
+    section: "ドメインの基本情報 > 請求書 > 請求書ステータス"
+    current: "Draft, Issued, Paid, Overdue, Awaiting Payment, Disputed"
+    note: "【日本語化完了】BillStatus Enum（data_model.py）、db.tomlの全請求書データともに対応済み。コード側はEnum member名で参照"
+    translations:
+      - en: "Draft"
+        ja: "下書き"
+      - en: "Issued"
+        ja: "発行済み"
+      - en: "Awaiting Payment"
+        ja: "支払い待ち"
+      - en: "Paid"
+        ja: "支払い済み"
+      - en: "Overdue"
+        ja: "延滞"
+      - en: "Disputed"
+        ja: "係争中"
+
+  - file: data_model.py
+    section: "DeviceType Enum"
+    current: "phone, router, tablet, watch, other"
+    note: "【日本語化完了】DeviceType Enum（data_model.py）、db.tomlの全デバイスデータ、main_policy.mdの記載すべて対応済み"
+    translations:
+      - en: "phone"
+        ja: "スマートフォン"
+      - en: "router"
+        ja: "ルーター"
+      - en: "tablet"
+        ja: "タブレット"
+      - en: "watch"
+        ja: "スマートウォッチ"
+      - en: "other"
+        ja: "その他"
+
+  - file: db.toml / main_policy.md / data_model.py
+    section: "顧客名の日本語化"
+    current: "田中太郎, 鈴木花子, 佐藤健一, 高橋美咲"
+    note: "【日本語化完了】顧客名・メールアドレスを日本人名に変更。db.toml、tasks/*.pyのハードコード値すべて対応済み"
+    translations:
+      - en: "John Smith"
+        ja: "田中太郎"
+      - en: "Sarah Johnson"
+        ja: "鈴木花子"
+      - en: "Michael Lee"
+        ja: "佐藤健一"
+      - en: "Emma Wilson"
+        ja: "高橋美咲"
+
+  - file: db.toml / main_policy.md / data_model.py
+    section: "ドメインの基本情報 > 顧客 > 住所"
+    current: "日本式住所（都道府県、市区町村、町名・番地、郵便番号）"
+    note: "【日本語化完了】Address クラスのdescription、db.tomlの住所データ、main_policy.mdの記載すべて対応済み。フィールド名(street/city/state/zip_code)は互換性のため維持"
+    translations:
+      - en: "street (e.g., 123 Main St)"
+        ja: "street → 町名・番地（例: 丸の内1-2-3）"
+      - en: "city (e.g., Anytown)"
+        ja: "city → 市区町村（例: 千代田区）"
+      - en: "state (e.g., CA)"
+        ja: "state → 都道府県（例: 東京都）"
+      - en: "zip_code (e.g., 90210)"
+        ja: "zip_code → 郵便番号（例: 100-0001）"
+
+  - file: tech_support_manual.md
+    section: "check_status_bar の表示値"
+    current: "Airplane Mode, No Signal, Poor, Fair, Good, Excellent, Data Enabled, Data Disabled, Data Saver, VPN Connected 等"
+    note: "【日本語化完了】ステータスバーの表示値を日本語化。data配下・src/配下ともに対応済み"
+    translations:
+      - en: "✈️ Airplane Mode"
+        ja: "✈️ 機内モード"
+      - en: "📵 No Signal"
+        ja: "📵 圏外"
+      - en: "📶¹ Poor"
+        ja: "📶¹ 弱い"
+      - en: "📶² Fair"
+        ja: "📶² やや弱い"
+      - en: "📶³ Good"
+        ja: "📶³ 良好"
+      - en: "📶⁴ Excellent"
+        ja: "📶⁴ 非常に良好"
+      - en: "📱 Data Enabled"
+        ja: "📱 データ有効"
+      - en: "📵 Data Disabled"
+        ja: "📵 データ無効"
+      - en: "🔽 Data Saver"
+        ja: "🔽 データセーバー"
+      - en: "🔒 VPN Connected"
+        ja: "🔒 VPN接続済み"
+
+  - file: user_data_model.py
+    section: "SignalStrength Enum"
+    current: "none, poor, fair, good, excellent"
+    note: "【日本語化完了】電波強度の値を日本語化。SignalStrength Enum、user_db.toml、出力ラベルすべて対応済み"
+    translations:
+      - en: "none"
+        ja: "圏外"
+      - en: "poor"
+        ja: "弱い"
+      - en: "fair"
+        ja: "やや弱い"
+      - en: "good"
+        ja: "良好"
+      - en: "excellent"
+        ja: "非常に良好"
+
+  - file: user_data_model.py
+    section: "PerformanceLevel Enum"
+    current: "unknown, poor, fair, good, excellent"
+    note: "【日本語化完了】速度テスト結果の品質表現を日本語化。PerformanceLevel Enum、出力メッセージ、アサーション、タスク定義すべて対応済み"
+    translations:
+      - en: "unknown"
+        ja: "不明"
+      - en: "poor"
+        ja: "遅い"
+      - en: "fair"
+        ja: "やや遅い"
+      - en: "good"
+        ja: "速い"
+      - en: "excellent"
+        ja: "非常に速い"
+      - en: "no connection"
+        ja: "接続なし"
+
+  - file: user_data_model.py
+    section: "SimStatus Enum"
+    current: "active, missing, locked with a PIN, locked with a PUK"
+    note: "【日本語化完了】SIMステータスの値を日本語化。SimStatus Enum、status_mapメッセージ、user_db.tomlすべて対応済み"
+    translations:
+      - en: "active"
+        ja: "アクティブ"
+      - en: "missing"
+        ja: "未挿入"
+      - en: "locked with a PIN"
+        ja: "PINロック中"
+      - en: "locked with a PUK"
+        ja: "PUKロック中"
+
+  - file: user_data_model.py
+    section: "APNNames Enum"
+    current: "internet, broken"
+    note: "【日本語化完了】APN設定値を日本語化。APNNames Enum、user_db.toml、check_apn_settings()のテンプレート、tech_support_manual.mdの記載すべて対応済み"
+    translations:
+      - en: "internet"
+        ja: "インターネット"
+      - en: "broken"
+        ja: "不正"
+      - en: "Incorrect"
+        ja: "不正"
+      - en: "Not Set"
+        ja: "未設定"
+
+  - file: user_data_model.py
+    section: "NetworkStatus Enum"
+    current: "connected, searching, no_service, emergency_only"
+    note: "【日本語化完了】ネットワーク接続ステータスを日本語化。NetworkStatus Enum、user_db.toml、service_issues.pyのアサーション引数すべて対応済み"
+    translations:
+      - en: "connected"
+        ja: "接続済み"
+      - en: "searching"
+        ja: "検索中"
+      - en: "no_service"
+        ja: "サービスなし"
+      - en: "emergency_only"
+        ja: "緊急通話のみ"
+
+  - file: user_data_model.py
+    section: "NetworkTechnology Enum"
+    current: "none, 2G, 3G, 4G, 5G"
+    note: "【日本語化完了】NetworkTechnology.NONEの値を日本語化（none→なし）。2G/3G/4G/5Gは世界共通の技術規格名のためそのまま"
+    translations:
+      - en: "none"
+        ja: "なし"
+
+  - file: tech_support_manual.md
+    section: "データセーバーモード"
+    current: "Data Saver mode is ON"
+    note: "【日本語化完了】データセーバーの返り値メッセージを日本語化。data配下・src/配下ともに対応済み"
+    translations:
+      - en: "Data Saver mode is ON"
+        ja: "データセーバーモード: オン"
+
+  - file: tech_support_manual.md
+    section: "VPN接続の問題"
+    current: "VPN is ON and connected"
+    note: "【日本語化完了】VPNステータスの返り値メッセージを日本語化。PerformanceLevel Enum、出力メッセージすべて対応済み"
+    translations:
+      - en: "VPN is ON and connected"
+        ja: "VPN: オン・接続済み"
+      - en: "performance level: Poor"
+        ja: "パフォーマンスレベル: 遅い"
+
+  - file: tech_support_manual.md
+    section: "Wi-Fi通話の干渉"
+    current: "Wi-Fi Calling is ON"
+    note: "【日本語化完了】Wi-Fi通話ステータスの返り値メッセージを日本語化。data配下・src/配下ともに対応済み"
+    translations:
+      - en: "Wi-Fi Calling is ON"
+        ja: "Wi-Fi通話: オン"
+
+# ============================================================
+# 一部完了（残作業あり）
+# ============================================================
+partial:
+  - file: main_policy.md
+    section: "ドメインの基本情報 > 支払い方法"
+    current: "Credit Card, Debit Card, PayPal"
+    note: "【一部完了】クレジットカード・デビットカードを日本語化済み。PayPalは固有名詞のため英語のまま"
+    translations:
+      - en: "Credit Card"
+        ja: "クレジットカード"
+      - en: "Debit Card"
+        ja: "デビットカード"
+    remaining:
+      - "PayPal を口座振替等の日本で一般的な決済手段に変更するか検討中"
+      - "db.toml の C1003 Michael Lee が PayPal を使用"
+
+  - file: user_data_model.py
+    section: "NetworkModePreference Enum"
+    current: "4g_5g_preferred, 4g_only, 3g_only, 2g_only"
+    note: "【一部完了】テンプレート部分（「Network Mode Preference:」→「ネットワークモード設定:」等）は日本語化済み。Enum値は英語のまま"
+    remaining:
+      - "Enum値はset_network_mode_preferenceの関数パラメータとしてマニュアル中に記載されている技術識別子"
+      - "日本語化する場合、tech_support_manual.mdのパラメータ例（\"4g_5g_preferred\", \"4g_only\"）もすべて変更が必要"
+      - "user_db.toml の network_mode_preference も変更が必要"
+
+  - file: tech_support_manual.md
+    section: "アプリの権限確認"
+    current: "app_name=\"messaging\", permission=\"storage\"/\"sms\""
+    note: "【一部完了】アプリ表示名を日本語化済み（メッセージング、ブラウザ）。権限名（sms, storage等）は英語のまま"
+    details:
+      - "AppStatus.app_nameフィールドを日本語表示名に変更（user_data_model.py, user_db.toml）"
+      - "user_tools.pyの全表示メッセージでapp_status.app_nameを使用するよう修正"
+      - "dictキー（messaging, browser）はツールパラメータ・タスク定義で使われるため英語のまま維持"
+    translations:
+      - en: "messaging"
+        ja: "メッセージング"
+      - en: "browser"
+        ja: "ブラウザ"
+    remaining:
+      - "権限名（sms, storage, phone, network）はPythonフィールド名かつsetattr/hasattrで使われるため英語のまま"
+      - "ツールのapp_nameパラメータ値（messaging, browser）はdictキーとして機能するため英語のまま"
+
+# ============================================================
+# 未着手
+# ============================================================
+pending:
+  - file: tech_support_manual.md
+    section: 複数箇所（回線の利用停止、データローミング、MMS等）
+    current: "一般ポリシー / 一般的な担当者向けポリシー（原文: general agent policy / general policy）"
+    note: main_policy.md を指しているが明示的なリンクがなくわかりにくい。「テレコムエージェントポリシー」等に統一して明示するか？
+    impact:
+      - path: data/tau2/domains/telecom_ja/tech_support_workflow.md
+        symbol: "ステップ 1.4, ステップ 2.1.4"
+        detail: 「メインポリシーの指示に従ってください」の記載がある
+
+# ============================================================
+# 元データの不備修正（翻訳ではなく英語版のバグを修正した箇所）
+# ============================================================
+original_data_fixes:
+  - file: tech_support_workflow.md
+    section: "パス 2.2 > ステップ 2.2.1, ステップ 2.2.2"
+    description: "ステップ遷移先の番号が誤っていたのを修正"
+    original_en:
+      - location: "Step 2.2.1 (Data Saver ON → 改善されない場合)"
+        wrong: "proceed to Step 6"
+        correct: "proceed to Step 2.2.2"
+      - location: "Step 2.2.1 (Data Saver OFF の場合)"
+        wrong: "Proceed to Step 6"
+        correct: "Proceed to Step 2.2.2"
+      - location: "Step 2.2.2 (古いネットワーク → 改善されない場合)"
+        wrong: "proceed to Step 7"
+        correct: "proceed to Step 2.2.3"
+      - location: "Step 2.2.2 (最適設定の場合)"
+        wrong: "Proceed to Step 7"
+        correct: "Proceed to Step 2.2.3"
+    ja_fix: "日本語版では正しいステップ番号（ステップ 2.2.2、ステップ 2.2.3）で記載済み"
+
+  - file: main_policy.md
+    section: "ドメインの基本情報 > 請求書 > 請求書ステータス"
+    description: "ステータスの種類数が実際の列挙と一致していなかったのを修正"
+    original_en:
+      location: "line 90"
+      wrong: "There are five bill status types: Draft, Issued, Paid, Overdue, Awaiting Payment, and Disputed."
+      correct: "6種類列挙されているが 'five' と記載されている（Draft, Issued, Paid, Overdue, Awaiting Payment, Disputed）"
+    ja_fix: "日本語版では「の6種類があります」と正しい数で記載済み"

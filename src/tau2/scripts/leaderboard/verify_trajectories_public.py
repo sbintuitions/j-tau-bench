@@ -1,5 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 from tau2.data_model.simulation import Results
 from tau2.registry import registry
