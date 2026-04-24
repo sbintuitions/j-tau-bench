@@ -182,7 +182,7 @@ def to_litellm_messages(messages: list[Message]) -> list[dict]:
                         "name": tc.name,
                         "function": {
                             "name": tc.name,
-                            "arguments": json.dumps(tc.arguments),
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
                         },
                         "type": "function",
                     }
