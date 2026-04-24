@@ -1,9 +1,9 @@
 import json
 
 from tau2.data_model.tasks import Task
-from tau2.domains.telecom.tasks.mms_issues import mms_issue_task_manager
-from tau2.domains.telecom.tasks.mobile_data_issues import mobile_data_task_manager
-from tau2.domains.telecom.tasks.service_issues import service_issues_task_manager
+from tau2.domains.telecom_ja.tasks.mms_issues import mms_issue_task_manager
+from tau2.domains.telecom_ja.tasks.mobile_data_issues import mobile_data_task_manager
+from tau2.domains.telecom_ja.tasks.service_issues import service_issues_task_manager
 from tau2.utils import DATA_DIR
 
 DOMAIN_DIR = DATA_DIR / "tau2" / "domains" / "telecom_ja"
