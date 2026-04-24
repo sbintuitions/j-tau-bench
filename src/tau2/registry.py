@@ -53,6 +53,22 @@ from tau2.domains.telecom.environment import (
 from tau2.domains.telecom.environment import (
     get_tasks_split as telecom_domain_get_tasks_split,
 )
+from tau2.domains.telecom_ja.environment import (
+    get_environment_manual_policy as telecom_ja_domain_get_environment_manual_policy,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_environment_workflow_policy as telecom_ja_domain_get_environment_workflow_policy,
+)
+from tau2.domains.telecom_ja.environment import get_tasks as telecom_ja_domain_get_tasks
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_full as telecom_ja_domain_get_tasks_full,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_small as telecom_ja_domain_get_tasks_small,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_split as telecom_ja_domain_get_tasks_split,
+)
 from tau2.environment.environment import Environment
 from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
@@ -342,6 +358,23 @@ try:
         telecom_domain_get_tasks,
         "telecom-workflow",
         get_task_splits=telecom_domain_get_tasks_split,
+    )
+
+    registry.register_domain(telecom_ja_domain_get_environment_manual_policy, "telecom_ja")
+    registry.register_domain(
+        telecom_ja_domain_get_environment_workflow_policy, "telecom_ja-workflow"
+    )
+    registry.register_tasks(telecom_ja_domain_get_tasks_full, "telecom_ja_full")
+    registry.register_tasks(telecom_ja_domain_get_tasks_small, "telecom_ja_small")
+    registry.register_tasks(
+        telecom_ja_domain_get_tasks,
+        "telecom_ja",
+        get_task_splits=telecom_ja_domain_get_tasks_split,
+    )
+    registry.register_tasks(
+        telecom_ja_domain_get_tasks,
+        "telecom_ja-workflow",
+        get_task_splits=telecom_ja_domain_get_tasks_split,
     )
 
     registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
