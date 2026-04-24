@@ -117,7 +117,7 @@ activation_date = "2024-12-10T15:45:00"
 
 [[lines]]
 line_id = "L1001"
-phone_number = "555-123-2001"
+phone_number = "03-1111-2222"
 status = "有効"
 plan_id = "P1001"
 device_id = "D1001"
@@ -129,7 +129,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1002"
-phone_number = "555-123-2002"
+phone_number = "090-1234-5678"
 status = "有効"
 plan_id = "P1002"
 device_id = "D1002"
@@ -142,7 +142,7 @@ last_sim_replacement_date = "2025-01-20"
 
 [[lines]]
 line_id = "L1003"
-phone_number = "555-123-2003"
+phone_number = "03-1234-2222"
 status = "利用停止"
 plan_id = "P1001"
 device_id = "D1003"
@@ -155,7 +155,7 @@ suspension_start_date = "2025-02-01"
 
 [[lines]]
 line_id = "L1004"
-phone_number = "555-123-2004"
+phone_number = "03-1234-3333"
 status = "有効"
 plan_id = "P1003"
 device_id = "D1004"
@@ -167,7 +167,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1005"
-phone_number = "555-123-2005"
+phone_number = "03-1111-3333"
 status = "有効"
 plan_id = "P1003"
 device_id = "D1005"
@@ -179,7 +179,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1006"
-phone_number = "555-123-2006"
+phone_number = "03-1111-4444"
 status = "有効"
 plan_id = "P1003"
 device_id = "D1006"
@@ -191,7 +191,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1007"
-phone_number = "555-123-2007"
+phone_number = "03-1111-5555"
 status = "有効"
 plan_id = "P1003"
 device_id = "D1007"
@@ -203,7 +203,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1008"
-phone_number = "555-123-2008"
+phone_number = "03-1111-6666"
 status = "有効"
 plan_id = "P1003"
 device_id = "D1008"
@@ -215,7 +215,7 @@ last_plan_change_date = "2025-01-10"
 
 [[lines]]
 line_id = "L1009"
-phone_number = "555-123-2009"
+phone_number = "03-1111-7777"
 status = "利用停止"
 plan_id = "P1002"
 device_id = "D1009"
@@ -232,7 +232,7 @@ customer_id = "C1001"
 full_name = "田中太郎"
 date_of_birth = "1985-06-15"
 email = "tanaka.taro@example.com"
-phone_number = "555-123-2002"
+phone_number = "090-1234-5678"
 account_status = "有効"
 created_at = "2025-01-15T10:30:00"
 goodwill_credit_used_this_year = 25.0
@@ -254,7 +254,7 @@ customer_id = "C1002"
 full_name = "鈴木花子"
 date_of_birth = "1990-11-22"
 email = "suzuki.hanako@example.com"
-phone_number = "555-123-1002"
+phone_number = "080-1234-5678"
 account_status = "有効"
 created_at = "2025-02-10T14:15:00"
 last_extension_date = "2025-01-05"
@@ -282,7 +282,7 @@ customer_id = "C1003"
 full_name = "佐藤健一"
 date_of_birth = "1978-04-30"
 email = "sato.kenichi@example.com"
-phone_number = "555-123-1003"
+phone_number = "0120-1111-2222"
 account_status = "利用停止"
 created_at = "2024-12-05T09:45:00"
 goodwill_credit_used_this_year = 50.0
@@ -304,7 +304,7 @@ customer_id = "C1004"
 full_name = "高橋美咲"
 date_of_birth = "1995-08-17"
 email = "takahashi.misaki@example.com"
-phone_number = "555-123-1004"
+phone_number = "090-1234-9876"
 account_status = "確認待ち"
 created_at = "2025-01-25T16:20:00"
 goodwill_credit_used_this_year = 0.0
@@ -327,25 +327,25 @@ total_due = 160.5
 due_date = "2025-01-19"
 status = "支払い済み"
 [[bills.line_items]]
-description = "Basic Plan - 電話番号 555-123-2001"
+description = "Basic Plan - 電話番号 03-1111-2222"
 amount = 40.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "Premium Plan - 電話番号 555-123-2002"
+description = "Premium Plan - 電話番号 090-1234-5678"
 amount = 65.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "Basic Plan - 電話番号 555-123-2003"
+description = "Basic Plan - 電話番号 03-1234-2222"
 amount = 40.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "データ超過 - 電話番号 555-123-2002"
+description = "データ超過 - 電話番号 090-1234-5678"
 amount = 15.5
 date = "2025-01-05"
 item_type = "超過料金"
@@ -361,25 +361,25 @@ total_due = 150.0
 due_date = "2025-02-19"
 status = "発行済み"
 [[bills.line_items]]
-description = "Basic Plan - 電話番号 555-123-2001"
+description = "Basic Plan - 電話番号 03-1111-2222"
 amount = 40.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "Premium Plan - 電話番号 555-123-2002"
+description = "Premium Plan - 電話番号 090-1234-5678"
 amount = 65.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "Basic Plan - 電話番号 555-123-2003"
+description = "Basic Plan - 電話番号 03-1234-2222"
 amount = 40.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "利用停止手数料 - 電話番号 555-123-2003"
+description = "利用停止手数料 - 電話番号 03-1234-2222"
 amount = 5.0
 date = "2025-02-05"
 item_type = "手数料"
@@ -438,13 +438,13 @@ total_due = 70.0
 due_date = "2025-02-19"
 status = "係争中"
 [[bills.line_items]]
-description = "Premium Plan - 電話番号 555-123-2009"
+description = "Premium Plan - 電話番号 03-1111-7777"
 amount = 65.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
-description = "利用停止手数料 - 電話番号 555-123-2009"
+description = "利用停止手数料 - 電話番号 03-1111-7777"
 amount = 5.0
 date = "2025-02-05"
 item_type = "手数料"

@@ -65,7 +65,7 @@ def set_surrounding(env: TelecomEnvironment) -> list[EnvFunctionCall]:
         EnvFunctionCall(
             env_type="user",
             func_name="set_user_info",
-            arguments={"name": "田中太郎", "phone_number": "555-123-2002"},
+            arguments={"name": "田中太郎", "phone_number": "090-1234-5678"},
         )
     ]
 
