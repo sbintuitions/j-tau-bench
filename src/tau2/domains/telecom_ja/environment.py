@@ -132,9 +132,9 @@ def get_environment(
         + "\n</tech_support_policy>"
     )
     if policy_type == "manual":
-        domain_name = "telecom"
+        domain_name = "telecom_ja"
     else:
-        domain_name = "telecom-workflow"
+        domain_name = "telecom_ja-workflow"
     env = TelecomEnvironment(
         domain_name=domain_name,
         policy=policy,
