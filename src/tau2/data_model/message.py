@@ -76,7 +76,7 @@ class ToolCall(BaseModel):
         if self.id:
             lines.append(f"id: {self.id}")
         lines.append(f"name: {self.name}")
-        lines.append(f"arguments:\n{json.dumps(self.arguments, indent=2)}")
+        lines.append(f"arguments:\n{json.dumps(self.arguments, indent=2, ensure_ascii=False)}")
         return "\n".join(lines)
 
     @classmethod

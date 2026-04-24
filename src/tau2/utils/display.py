@@ -518,11 +518,11 @@ class ConsoleDisplay:
                 )
             if task.initial_state.initialization_actions:
                 initial_state_parts.append(
-                    f"[{c.label}]Initialization Actions:[/]\n{json.dumps([a.model_dump() for a in task.initial_state.initialization_actions], indent=2)}"
+                    f"[{c.label}]Initialization Actions:[/]\n{json.dumps([a.model_dump() for a in task.initial_state.initialization_actions], indent=2, ensure_ascii=False)}"
                 )
             if task.initial_state.message_history:
                 initial_state_parts.append(
-                    f"[{c.label}]Message History:[/]\n{json.dumps([m.model_dump() for m in task.initial_state.message_history], indent=2)}"
+                    f"[{c.label}]Message History:[/]\n{json.dumps([m.model_dump() for m in task.initial_state.message_history], indent=2, ensure_ascii=False)}"
                 )
 
             if initial_state_parts:
@@ -536,15 +536,15 @@ class ConsoleDisplay:
             eval_parts = []
             if task.evaluation_criteria.actions:
                 eval_parts.append(
-                    f"[{c.label}]Required Actions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.actions], indent=2)}"
+                    f"[{c.label}]Required Actions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.actions], indent=2, ensure_ascii=False)}"
                 )
             if task.evaluation_criteria.env_assertions:
                 eval_parts.append(
-                    f"[{c.label}]Env Assertions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.env_assertions], indent=2)}"
+                    f"[{c.label}]Env Assertions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.env_assertions], indent=2, ensure_ascii=False)}"
                 )
             if task.evaluation_criteria.communicate_info:
                 eval_parts.append(
-                    f"[{c.label}]Information to Communicate:[/]\n{json.dumps(task.evaluation_criteria.communicate_info, indent=2)}"
+                    f"[{c.label}]Information to Communicate:[/]\n{json.dumps(task.evaluation_criteria.communicate_info, indent=2, ensure_ascii=False)}"
                 )
             if eval_parts:
                 content_parts.append(
@@ -783,7 +783,7 @@ class ConsoleDisplay:
                             tool_calls = []
                             for tool in msg.tool_calls:
                                 tool_calls.append(
-                                    f"[{tool_style}]Tool: {tool.name}[/]\n[{tool_style}]Args: {json.dumps(tool.arguments, indent=2)}[/]"
+                                    f"[{tool_style}]Tool: {tool.name}[/]\n[{tool_style}]Args: {json.dumps(tool.arguments, indent=2, ensure_ascii=False)}[/]"
                                 )
                             details = "\n".join(tool_calls)
                     elif isinstance(msg, ToolMessage):
@@ -2399,7 +2399,7 @@ class MarkdownDisplay:
     @classmethod
     def display_actions(cls, actions: List[Action]) -> str:
         """Display actions in markdown format."""
-        return f"```json\n{json.dumps([action.model_dump() for action in actions], indent=2)}\n```"
+        return f"```json\n{json.dumps([action.model_dump() for action in actions], indent=2, ensure_ascii=False)}\n```"
 
     @classmethod
     def display_messages(cls, messages: list[Message]) -> str:
@@ -2637,7 +2637,7 @@ class MarkdownDisplay:
                 tool_calls = []
                 for tool in msg.tool_calls:
                     tool_calls.append(
-                        f"**Tool Call**: {tool.name}\n```json\n{json.dumps(tool.arguments, indent=2)}\n```"
+                        f"**Tool Call**: {tool.name}\n```json\n{json.dumps(tool.arguments, indent=2, ensure_ascii=False)}\n```"
                     )
                 parts.extend(tool_calls)
 
