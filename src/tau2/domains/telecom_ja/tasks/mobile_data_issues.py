@@ -62,13 +62,13 @@ def is_fixed(env: TelecomEnvironment):
 def set_surrounding(*args, **kwargs) -> list[EnvFunctionCall]:
     """
     Set the user info for the mobile data issue task.
-    User info is expected to be "田中太郎" and "555-123-2002".
+    User info is expected to be "田中太郎" and "090-1234-5678".
     """
     return [
         EnvFunctionCall(
             env_type="user",
             func_name="set_user_info",
-            arguments={"name": "田中太郎", "phone_number": "555-123-2002"},
+            arguments={"name": "田中太郎", "phone_number": "090-1234-5678"},
         )
     ]
 
