@@ -1,9 +1,10 @@
 # Copyright Sierra
 """Voice processing module for TAU2."""
 
-from . import synthesis, transcription
+# NOTE: Commented out to run without voice extras
+# from . import synthesis, transcription
 
-__all__ = [
-    "synthesis",
-    "transcription",
-]
+# __all__ = [
+#     "synthesis",
+#     "transcription",
+# ]

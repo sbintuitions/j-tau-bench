@@ -22,8 +22,9 @@ from tau2.data_model.message import (
     TurnTakingAction,
 )
 from tau2.utils.utils import get_now
-from tau2.voice.utils.audio_preprocessing import pad_audio_with_zeros
-from tau2.voice.utils.probability import poisson_should_trigger
+# NOTE: Commented out to run without voice extras (using local import instead)
+# from tau2.voice.utils.audio_preprocessing import pad_audio_with_zeros
+# from tau2.voice.utils.probability import poisson_should_trigger
 
 # Generic type variables for streaming mixins
 InputMessageType = TypeVar("InputMessageType", bound=Message)
@@ -2414,6 +2415,7 @@ class AudioChunkingMixin(
                 audio_path=None,
             )
             # Pad last chunk if necessary to maintain consistent chunk size
+            from tau2.voice.utils.audio_preprocessing import pad_audio_with_zeros
             chunk_audio = pad_audio_with_zeros(chunk_audio, self.chunk_size)
             chunks.append(chunk_audio)
         return chunks
@@ -2491,6 +2493,7 @@ def should_backchannel(
     # Between min and max - use Poisson probability
     if rng is None:
         rng = random.Random()
+    from tau2.voice.utils.probability import poisson_should_trigger
     triggered = poisson_should_trigger(poisson_rate, tick_duration_seconds, rng)
     return triggered, f"Poisson (rate={poisson_rate:.6f}/s, triggered={triggered})"
 

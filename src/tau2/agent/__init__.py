@@ -2,7 +2,8 @@ import warnings
 
 from tau2.agent.base.llm_config import LLMConfigMixin
 from tau2.agent.base.participant import FullDuplexParticipant, HalfDuplexParticipant
-from tau2.agent.base.streaming import StreamingMixin, StreamingState
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.base.streaming import StreamingMixin, StreamingState
 from tau2.agent.base.streaming_utils import (
     extract_active_chunk_ids,
     extract_all_chunk_ids,
@@ -20,8 +21,8 @@ from tau2.agent.base_agent import (
     ValidAgentInputMessage,
 )
 from tau2.agent.llm_agent import LLMAgent, LLMAgentState, LLMGTAgent, LLMSoloAgent
-from tau2.voice.audio_native.openai import OpenAIRealtimeProvider
-from tau2.voice.audio_native.openai.provider import OpenAIVADMode
+# from tau2.voice.audio_native.openai import OpenAIRealtimeProvider
+# from tau2.voice.audio_native.openai.provider import OpenAIVADMode
 
 # =============================================================================
 # DEPRECATION ALIASES
@@ -59,7 +60,7 @@ BaseStreamingParticipant = FullDuplexParticipant
 BaseAgent = HalfDuplexAgent
 LocalAgent = HalfDuplexAgent
 BaseStreamingAgent = FullDuplexAgent
-BaseVoiceAgent = HalfDuplexVoiceAgent
+# BaseVoiceAgent = HalfDuplexVoiceAgent
 
 
 __all__ = [
@@ -69,8 +70,8 @@ __all__ = [
     # LLM configuration mixin
     "LLMConfigMixin",
     # Generic streaming mixins
-    "StreamingMixin",
-    "StreamingState",
+    # "StreamingMixin",
+    # "StreamingState",
     # Streaming utilities
     "extract_message_uuid",
     "extract_active_chunk_ids",
@@ -91,13 +92,13 @@ __all__ = [
     "LLMGTAgent",
     "LLMSoloAgent",
     # Audio Native
-    "OpenAIRealtimeProvider",
-    "OpenAIVADMode",
+    # "OpenAIRealtimeProvider",
+    # "OpenAIVADMode",
     # Deprecated aliases (kept for backward compatibility)
     "BaseConversationParticipant",
     "BaseStreamingParticipant",
     "BaseAgent",
     "LocalAgent",
     "BaseStreamingAgent",
-    "BaseVoiceAgent",
+    # "BaseVoiceAgent",
 ]

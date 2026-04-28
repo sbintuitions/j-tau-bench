@@ -4,9 +4,10 @@ from typing import Callable, Dict, Optional
 from loguru import logger
 from pydantic import BaseModel
 
-from tau2.agent.discrete_time_audio_native_agent import (
-    create_discrete_time_audio_native_agent,
-)
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.discrete_time_audio_native_agent import (
+#     create_discrete_time_audio_native_agent,
+# )
 from tau2.agent.llm_agent import (
     LLMGTAgent,
     LLMSoloAgent,
@@ -22,12 +23,12 @@ from tau2.domains.airline.environment import get_tasks as airline_domain_get_tas
 from tau2.domains.airline.environment import (
     get_tasks_split as airline_domain_get_tasks_split,
 )
-from tau2.domains.banking_knowledge.environment import (
-    get_environment as knowledge_domain_get_environment,
-)
-from tau2.domains.banking_knowledge.environment import (
-    get_tasks as knowledge_domain_get_tasks,
-)
+# from tau2.domains.banking_knowledge.environment import (
+#     get_environment as knowledge_domain_get_environment,
+# )
+# from tau2.domains.banking_knowledge.environment import (
+#     get_tasks as knowledge_domain_get_tasks,
+# )
 from tau2.domains.mock.environment import get_environment as mock_domain_get_environment
 from tau2.domains.mock.environment import get_tasks as mock_domain_get_tasks
 from tau2.domains.retail.environment import (
@@ -72,7 +73,7 @@ from tau2.domains.telecom_ja.environment import (
 from tau2.environment.environment import Environment
 from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
-from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 
 
 class RegistryInfo(BaseModel):
@@ -299,16 +300,9 @@ try:
     # User implementations
     registry.register_user(UserSimulator, "user_simulator")
     registry.register_user(DummyUser, "dummy_user")
-    try:
-        from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
-
-        registry.register_user(
-            VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
-        )
-    except ImportError:
-        logger.debug(
-            "Voice dependencies not installed, skipping voice user registration"
-        )
+    registry.register_user(
+        VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
+    )
 
     # Agent factories
     registry.register_agent_factory(create_llm_agent, "llm_agent")

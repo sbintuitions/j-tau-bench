@@ -33,7 +33,8 @@ from tau2.registry import Registry, registry
 from tau2.run import run_domain
 from tau2.user.user_simulator import UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
-from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+# NOTE: Commented out to run without voice extras
+# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 from tau2.utils.display import ConsoleDisplay, MarkdownDisplay
 
 # =============================================================================

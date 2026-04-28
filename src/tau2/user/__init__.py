@@ -4,7 +4,7 @@ User module exports.
 
 import warnings
 
-from tau2.user.user_simulator import DummyUser, UserSimulator, VoiceUserSimulator
+from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import (
     FullDuplexUser,
     FullDuplexVoiceUser,
@@ -13,7 +13,10 @@ from tau2.user.user_simulator_base import (
     UserState,
     ValidUserInputMessage,
 )
-from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+
+# NOTE: Commented out to run without voice extras
+# from tau2.user.user_simulator import VoiceUserSimulator
+# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 
 # =============================================================================
 # DEPRECATION ALIASES
