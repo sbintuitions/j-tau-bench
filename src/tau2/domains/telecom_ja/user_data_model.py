@@ -271,7 +271,7 @@ class MockPhoneAttributes(BaseModelNoExtra):
     app_statuses: Dict[str, AppStatus] = Field(
         default_factory=lambda: {
             "messaging": AppStatus(
-                app_name="メッセージング",
+                app_name="メッセージ",
                 permissions=AppPermissions(sms=True, storage=True, phone=True),
             ),
             "browser": AppStatus(

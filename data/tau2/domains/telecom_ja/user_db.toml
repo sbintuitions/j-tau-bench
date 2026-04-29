@@ -24,7 +24,7 @@ mms_apn = "mms"
 mmsc_url = "http://mms.carrier.com/mms/wapenc"
 
 [device.app_statuses.messaging]
-app_name = "メッセージング"
+app_name = "メッセージ"
 
 [device.app_statuses.messaging.permissions]
 sms = true

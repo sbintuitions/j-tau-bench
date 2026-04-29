@@ -145,9 +145,9 @@ class TelecomUserTools(ToolKitBase):
         lines = [
             f"機内モード: {'オン' if status['airplane_mode'] else 'オフ'}",
             f"SIMカードステータス: {status['sim_status'].value}",
-            f"セルラー接続: {status['connection_status'].value}",
+            f"モバイル接続: {status['connection_status'].value}",
             f"電波強度: {status['signal_strength'].value}",
-            f"ネットワークタイプ: {status['network_technology'].value}",
+            f"モバイル通信の種類: {status['network_technology'].value}",
             f"モバイルデータ: {'有効' if status['mobile_data_enabled'] else '無効'}",
             f"データローミング: {'有効' if status['data_roaming_enabled'] else '無効'}",
             f"Wi-Fi: {'オン' if status['wifi_enabled'] else 'オフ'}",
@@ -178,7 +178,7 @@ class TelecomUserTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def check_network_mode_preference(self) -> str:
         """Shows the current network mode preference."""
-        return f"ネットワークモード設定: {self._check_network_mode_preference().value}"
+        return f"モバイル通信モード設定: {self._check_network_mode_preference().value}"
 
     def _check_network_mode_preference(self) -> NetworkModePreference:
         """Returns the current network mode preference."""
@@ -191,8 +191,8 @@ class TelecomUserTools(ToolKitBase):
         """Changes the type of cellular network your phone prefers to connect to (e.g., 5G, LTE/4G, 3G). Higher-speed networks (LTE/5G) provide faster data but may use more battery."""
         valid_mode = self._set_network_mode_preference(mode)
         if valid_mode is None:
-            return f"ネットワークモードの設定に失敗しました: '{mode}' は有効なオプションではありません。次のいずれかを使用してください: {', '.join([m.value for m in NetworkModePreference])}\nステータスバー: {self._check_status_bar()}"
-        status_update = f"ネットワークモードを設定しました: {valid_mode.value}"
+            return f"モバイル通信モードの設定に失敗しました: '{mode}' は有効なオプションではありません。次のいずれかを使用してください: {', '.join([m.value for m in NetworkModePreference])}\nステータスバー: {self._check_status_bar()}"
+        status_update = f"モバイル通信モードを設定しました: {valid_mode.value}"
         return f"{status_update}\nステータスバー: {self._check_status_bar()}"
 
     def _set_network_mode_preference(
@@ -254,11 +254,11 @@ class TelecomUserTools(ToolKitBase):
         if description == "非常に遅い":
             advice = "接続が非常に遅いです。基本的なウェブブラウジングも困難な場合があります。"
         elif description == "遅い":
-            advice = "接続が遅いです。ウェブブラウジングが遅く、ストリーミングは困難です。"
+            advice = "接続が遅いです。ウェブブラウジングが遅く、動画の再生は困難です。"
         elif description == "やや遅い":
-            advice = "ウェブブラウジングや標準画質のストリーミングには対応できます。"
+            advice = "ウェブブラウジングや標準画質の動画再生には対応できます。"
         elif description == "速い":
-            advice = "HD ストリーミングを含むほとんどのアクティビティに対応できます。"
+            advice = "HD動画の再生を含むほとんどのアクティビティに対応できます。"
         elif description == "非常に速い":
             advice = "接続が非常に速いです。"
         else:
@@ -910,9 +910,9 @@ class TelecomUserTools(ToolKitBase):
         """Checks if the default messaging app can send MMS messages."""
         result = self._can_send_mms()
         if result:
-            return "メッセージングアプリはMMSメッセージを送信できます。"
+            return "メッセージアプリはMMSメッセージを送信できます。"
         else:
-            return "メッセージングアプリはMMSメッセージを送信できません。"
+            return "メッセージアプリはMMSメッセージを送信できません。"
 
     def _can_send_mms(self) -> bool:
         """Checks if the default messaging app can send MMS messages."""
@@ -961,7 +961,7 @@ class TelecomUserTools(ToolKitBase):
             self.device.active_apn_settings = APNSettings()
 
         # 1. Network Service Restart
-        lines.append("ネットワークサービスを再起動しています...")
+        lines.append("モバイル通信サービスを再起動しています...")
         self.device.network_connection_status = NetworkStatus.SEARCHING
         self.simulate_network_search()  # Re-evaluate network connection
         return "\n".join(lines)
