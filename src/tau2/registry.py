@@ -300,9 +300,10 @@ try:
     # User implementations
     registry.register_user(UserSimulator, "user_simulator")
     registry.register_user(DummyUser, "dummy_user")
-    registry.register_user(
-        VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
-    )
+    # NOTE: Commented out to run without voice extras
+    # registry.register_user(
+    #     VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
+    # )
 
     # Agent factories
     registry.register_agent_factory(create_llm_agent, "llm_agent")
@@ -317,10 +318,11 @@ try:
         task_filter=LLMSoloAgent.check_valid_task,
         metadata={"solo_mode": True},
     )
-    registry.register_agent_factory(
-        create_discrete_time_audio_native_agent,
-        "discrete_time_audio_native_agent",
-    )
+    # NOTE: Commented out to run without voice extras
+    # registry.register_agent_factory(
+    #     create_discrete_time_audio_native_agent,
+    #     "discrete_time_audio_native_agent",
+    # )
     registry.register_domain(mock_domain_get_environment, "mock")
     registry.register_tasks(mock_domain_get_tasks, "mock")
 
@@ -372,8 +374,8 @@ try:
         get_task_splits=telecom_ja_domain_get_tasks_split,
     )
 
-    registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
-    registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
+    # registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
+    # registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
 
     logger.debug(
         f"Default components registered successfully. Registry info: {json.dumps(registry.get_info().model_dump(), indent=2)}"
