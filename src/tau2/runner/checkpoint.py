@@ -228,7 +228,7 @@ def create_checkpoint_saver(
             )
             try:
                 with os.fdopen(fd, "w") as fp:
-                    json.dump(ckpt, fp, indent=2)
+                    json.dump(ckpt, fp, indent=2, ensure_ascii=False)
                 os.replace(tmp_path, save_path)  # Atomic on POSIX
             except Exception:
                 if os.path.exists(tmp_path):
@@ -281,7 +281,7 @@ def create_checkpoint_replacer(
             )
             try:
                 with os.fdopen(fd, "w") as fp:
-                    json.dump(ckpt, fp, indent=2)
+                    json.dump(ckpt, fp, indent=2, ensure_ascii=False)
                 os.replace(tmp_path, save_path)
             except Exception:
                 if os.path.exists(tmp_path):
