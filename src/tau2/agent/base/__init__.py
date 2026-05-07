@@ -62,7 +62,7 @@ def _deprecated_alias(old_name: str, new_name: str, new_class):
 
     return __getattr__
 
-
+# NOTE: Commented out to run without voice extras
 # Deprecated aliases for backward compatibility
 # BaseConversationParticipant = HalfDuplexParticipant
 # BaseStreamingParticipant = FullDuplexParticipant
@@ -70,12 +70,14 @@ def _deprecated_alias(old_name: str, new_name: str, new_class):
 
 
 __all__ = [
+    # NOTE: Commented out to run without voice extras
     # Protocol base classes
     # "HalfDuplexParticipant",
     # "FullDuplexParticipant",
     # "VoiceParticipantMixin",
     # LLM configuration
     "LLMConfigMixin",
+    # NOTE: Commented out to run without voice extras
     # Streaming components
     # "StreamingMixin",
     # "StreamingState",
@@ -83,6 +85,7 @@ __all__ = [
     "BasicActionType",
     "basic_turn_taking_policy",
     "merge_homogeneous_chunks",
+    # NOTE: Commented out to run without voice extras
     # Streaming utilities
     "extract_message_uuid",
     "extract_active_chunk_ids",
@@ -91,6 +94,7 @@ __all__ = [
     "extract_gold_text",
     "extract_chunks_with_text",
     "format_transcript_comparison",
+    # NOTE: Commented out to run without voice extras
     # Voice components
     # "VoiceMixin",
     # "VoiceState",

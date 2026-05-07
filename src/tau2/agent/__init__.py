@@ -21,6 +21,7 @@ from tau2.agent.base_agent import (
     ValidAgentInputMessage,
 )
 from tau2.agent.llm_agent import LLMAgent, LLMAgentState, LLMGTAgent, LLMSoloAgent
+# NOTE: Commented out to run without voice extras
 # from tau2.voice.audio_native.openai import OpenAIRealtimeProvider
 # from tau2.voice.audio_native.openai.provider import OpenAIVADMode
 
@@ -64,11 +65,14 @@ BaseStreamingAgent = FullDuplexAgent
 
 
 __all__ = [
+    # NOTE: Commented out to run without voice extras
     # Generic base classes
     "HalfDuplexParticipant",
     "FullDuplexParticipant",
+    # NOTE: Commented out to run without voice extras
     # LLM configuration mixin
     "LLMConfigMixin",
+    # NOTE: Commented out to run without voice extras
     # Generic streaming mixins
     # "StreamingMixin",
     # "StreamingState",
@@ -80,17 +84,20 @@ __all__ = [
     "extract_gold_text",
     "extract_chunks_with_text",
     "format_transcript_comparison",
+    # NOTE: Commented out to run without voice extras
     # Agent-specific base classes
     "HalfDuplexAgent",
     "FullDuplexAgent",
     "HalfDuplexVoiceAgent",
     "FullDuplexVoiceAgent",
     "ValidAgentInputMessage",
+    # NOTE: Commented out to run without voice extras
     # LLM Agents
     "LLMAgent",
     "LLMAgentState",
     "LLMGTAgent",
     "LLMSoloAgent",
+    # NOTE: Commented out to run without voice extras
     # Audio Native
     # "OpenAIRealtimeProvider",
     # "OpenAIVADMode",
@@ -100,5 +107,6 @@ __all__ = [
     "BaseAgent",
     "LocalAgent",
     "BaseStreamingAgent",
+    # NOTE: Commented out to run without voice extras
     # "BaseVoiceAgent",
 ]

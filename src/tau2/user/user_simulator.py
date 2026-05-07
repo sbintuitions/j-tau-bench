@@ -3,6 +3,7 @@ from typing import Generic, Optional, Tuple, TypeVar
 from loguru import logger
 
 from tau2.agent.base.llm_config import LLMConfigMixin
+# NOTE: Commented out to run without voice extras
 # from tau2.agent.base.voice import VoiceMixin, VoiceState
 # from tau2.data_model.audio import PCM_SAMPLE_RATE
 from tau2.data_model.message import (

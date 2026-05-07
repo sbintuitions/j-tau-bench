@@ -23,6 +23,7 @@ from tau2.domains.airline.environment import get_tasks as airline_domain_get_tas
 from tau2.domains.airline.environment import (
     get_tasks_split as airline_domain_get_tasks_split,
 )
+# NOTE: Commented out to run without voice extras
 # from tau2.domains.banking_knowledge.environment import (
 #     get_environment as knowledge_domain_get_environment,
 # )
@@ -374,6 +375,7 @@ try:
         get_task_splits=telecom_ja_domain_get_tasks_split,
     )
 
+    # NOTE: Commented out to run without voice extras
     # registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
     # registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
 
