@@ -61,15 +61,14 @@ BaseStreamingParticipant = FullDuplexParticipant
 BaseAgent = HalfDuplexAgent
 LocalAgent = HalfDuplexAgent
 BaseStreamingAgent = FullDuplexAgent
+# NOTE: Commented out to run without voice extras
 # BaseVoiceAgent = HalfDuplexVoiceAgent
 
 
 __all__ = [
-    # NOTE: Commented out to run without voice extras
     # Generic base classes
     "HalfDuplexParticipant",
     "FullDuplexParticipant",
-    # NOTE: Commented out to run without voice extras
     # LLM configuration mixin
     "LLMConfigMixin",
     # NOTE: Commented out to run without voice extras
@@ -84,14 +83,12 @@ __all__ = [
     "extract_gold_text",
     "extract_chunks_with_text",
     "format_transcript_comparison",
-    # NOTE: Commented out to run without voice extras
     # Agent-specific base classes
     "HalfDuplexAgent",
     "FullDuplexAgent",
     "HalfDuplexVoiceAgent",
     "FullDuplexVoiceAgent",
     "ValidAgentInputMessage",
-    # NOTE: Commented out to run without voice extras
     # LLM Agents
     "LLMAgent",
     "LLMAgentState",

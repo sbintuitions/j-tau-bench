@@ -85,7 +85,6 @@ __all__ = [
     "BasicActionType",
     "basic_turn_taking_policy",
     "merge_homogeneous_chunks",
-    # NOTE: Commented out to run without voice extras
     # Streaming utilities
     "extract_message_uuid",
     "extract_active_chunk_ids",
