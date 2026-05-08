@@ -149,6 +149,10 @@ class ConsoleDisplay:
         Normalizes turn actions into broader categories so related actions
         (like 'generate_message' and 'keep_talking') are grouped together.
 
+        When there is no agent turn action (e.g., audio-native providers that
+        don't emit turn-taking metadata), agent content presence is factored
+        into the pattern so that gaps in agent speech break groups.
+
         Args:
             info: Dictionary with tick info including agent/user turn actions and content
 
@@ -162,22 +166,33 @@ class ConsoleDisplay:
                 return "active_speech"
             return action_name
 
+        has_agent = bool(info.get("agent_content"))
+
         # Check agent turn action first
         if info.get("agent_turn_action"):
             return normalize_action(info["agent_turn_action"])
 
         # Check user turn action (may have the decision when agent action is empty)
         if info.get("user_turn_action"):
-            return normalize_action(info["user_turn_action"])
+            base = normalize_action(info["user_turn_action"])
+            # Distinguish agent-speaking vs agent-silent so that pauses in
+            # agent speech (e.g., barge-in recovery) create separate rows.
+            if has_agent:
+                return f"{base}+agent"
+            return base
 
         # No turn action - check content
-        has_agent = bool(info.get("agent_content"))
         has_user = bool(info.get("user_content"))
         if not has_agent and not has_user:
             return None  # Empty tick - can join any group
 
         # Has content but no turn action - group by whether anyone is speaking
         return "active_speech"
+
+    # Max ticks of agent silence that are absorbed into the current group
+    # rather than breaking it.  At 200ms/tick this means gaps <= 200ms are
+    # treated as continuous speech.
+    AGENT_CONTENT_GAP_TOLERANCE = 1
 
     @classmethod
     def _group_ticks_by_pattern(
@@ -190,6 +205,10 @@ class ConsoleDisplay:
 
         Empty ticks (None pattern) don't break groups - only different non-empty patterns do.
         Tool activity always breaks a group.
+
+        Short gaps in agent content (up to ``AGENT_CONTENT_GAP_TOLERANCE`` ticks)
+        are absorbed rather than splitting a group.  This avoids breaking a
+        single agent utterance into multiple rows because of a brief silence.
 
         Args:
             ticks: List of Tick objects
@@ -243,13 +262,28 @@ class ConsoleDisplay:
                     j += 1
                     continue
 
-                # Stop if pattern changes to a different non-empty pattern
-                if next_pattern != last_content_pattern:
-                    break
-
                 # Same pattern - continue grouping
-                group_infos.append(next_info)
-                j += 1
+                if next_pattern == last_content_pattern:
+                    group_infos.append(next_info)
+                    j += 1
+                    continue
+
+                # Short gap in agent content: if agent was speaking and
+                # content just dropped for ≤ AGENT_CONTENT_GAP_TOLERANCE
+                # ticks, peek ahead and absorb the gap.
+                if (
+                    last_content_pattern.endswith("+agent")
+                    and next_pattern == last_content_pattern.removesuffix("+agent")
+                    and j + 1 < len(ticks)
+                    and get_pattern(extract_tick_info(ticks[j + 1]))
+                    == last_content_pattern
+                ):
+                    group_infos.append(next_info)
+                    j += 1
+                    continue
+
+                # Different non-empty pattern — break the group
+                break
 
             end_tick = ticks[j - 1].tick_id
             groups.append((start_tick, end_tick, group_infos))
@@ -362,14 +396,14 @@ class ConsoleDisplay:
             audio_table.add_row(
                 "Wait (other):",
                 f"{anc.wait_to_respond_threshold_other_seconds}s",
-                "Fast Forward:",
-                f"{anc.fast_forward_mode}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Wait (self):",
                 f"{anc.wait_to_respond_threshold_self_seconds}s",
-                "Buffer Complete:",
-                f"{anc.buffer_until_complete}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Yield (interrupted):",
@@ -484,11 +518,11 @@ class ConsoleDisplay:
                 )
             if task.initial_state.initialization_actions:
                 initial_state_parts.append(
-                    f"[{c.label}]Initialization Actions:[/]\n{json.dumps([a.model_dump() for a in task.initial_state.initialization_actions], indent=2)}"
+                    f"[{c.label}]Initialization Actions:[/]\n{json.dumps([a.model_dump() for a in task.initial_state.initialization_actions], indent=2, ensure_ascii=False)}"
                 )
             if task.initial_state.message_history:
                 initial_state_parts.append(
-                    f"[{c.label}]Message History:[/]\n{json.dumps([m.model_dump() for m in task.initial_state.message_history], indent=2)}"
+                    f"[{c.label}]Message History:[/]\n{json.dumps([m.model_dump() for m in task.initial_state.message_history], indent=2, ensure_ascii=False)}"
                 )
 
             if initial_state_parts:
@@ -502,15 +536,15 @@ class ConsoleDisplay:
             eval_parts = []
             if task.evaluation_criteria.actions:
                 eval_parts.append(
-                    f"[{c.label}]Required Actions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.actions], indent=2)}"
+                    f"[{c.label}]Required Actions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.actions], indent=2, ensure_ascii=False)}"
                 )
             if task.evaluation_criteria.env_assertions:
                 eval_parts.append(
-                    f"[{c.label}]Env Assertions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.env_assertions], indent=2)}"
+                    f"[{c.label}]Env Assertions:[/]\n{json.dumps([a.model_dump() for a in task.evaluation_criteria.env_assertions], indent=2, ensure_ascii=False)}"
                 )
             if task.evaluation_criteria.communicate_info:
                 eval_parts.append(
-                    f"[{c.label}]Information to Communicate:[/]\n{json.dumps(task.evaluation_criteria.communicate_info, indent=2)}"
+                    f"[{c.label}]Information to Communicate:[/]\n{json.dumps(task.evaluation_criteria.communicate_info, indent=2, ensure_ascii=False)}"
                 )
             if eval_parts:
                 content_parts.append(
@@ -749,7 +783,7 @@ class ConsoleDisplay:
                             tool_calls = []
                             for tool in msg.tool_calls:
                                 tool_calls.append(
-                                    f"[{tool_style}]Tool: {tool.name}[/]\n[{tool_style}]Args: {json.dumps(tool.arguments, indent=2)}[/]"
+                                    f"[{tool_style}]Tool: {tool.name}[/]\n[{tool_style}]Args: {json.dumps(tool.arguments, indent=2, ensure_ascii=False)}[/]"
                                 )
                             details = "\n".join(tool_calls)
                     elif isinstance(msg, ToolMessage):
@@ -1417,14 +1451,14 @@ class ConsoleDisplay:
             audio_table.add_row(
                 "Wait (other):",
                 f"{anc.wait_to_respond_threshold_other_seconds}s",
-                "Fast Forward:",
-                f"{anc.fast_forward_mode}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Wait (self):",
                 f"{anc.wait_to_respond_threshold_self_seconds}s",
-                "Buffer Complete:",
-                f"{anc.buffer_until_complete}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Yield (interrupted):",
@@ -2365,7 +2399,7 @@ class MarkdownDisplay:
     @classmethod
     def display_actions(cls, actions: List[Action]) -> str:
         """Display actions in markdown format."""
-        return f"```json\n{json.dumps([action.model_dump() for action in actions], indent=2)}\n```"
+        return f"```json\n{json.dumps([action.model_dump() for action in actions], indent=2, ensure_ascii=False)}\n```"
 
     @classmethod
     def display_messages(cls, messages: list[Message]) -> str:
@@ -2603,7 +2637,7 @@ class MarkdownDisplay:
                 tool_calls = []
                 for tool in msg.tool_calls:
                     tool_calls.append(
-                        f"**Tool Call**: {tool.name}\n```json\n{json.dumps(tool.arguments, indent=2)}\n```"
+                        f"**Tool Call**: {tool.name}\n```json\n{json.dumps(tool.arguments, indent=2, ensure_ascii=False)}\n```"
                     )
                 parts.extend(tool_calls)
 

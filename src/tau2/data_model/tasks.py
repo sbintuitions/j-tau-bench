@@ -150,7 +150,7 @@ class Action(BaseModel):
         lines.append(f"Action ID: {self.action_id}")
         lines.append(f"Requestor: {self.requestor}")
         lines.append(f"Name: {self.name}")
-        lines.append(f"Arguments:\n{json.dumps(self.arguments, indent=2)}")
+        lines.append(f"Arguments:\n{json.dumps(self.arguments, indent=2, ensure_ascii=False)}")
         if self.info is not None:
             lines.append(f"Info:\n{textwrap.indent(self.info, '    ')}")
         return "\n".join(lines)
@@ -201,7 +201,7 @@ class EnvFunctionCall(BaseModel):
         lines = []
         lines.append(f"Env Type: {self.env_type}")
         lines.append(f"Func Name: {self.func_name}")
-        lines.append(f"Arguments:\n{json.dumps(self.arguments, indent=2)}")
+        lines.append(f"Arguments:\n{json.dumps(self.arguments, indent=2, ensure_ascii=False)}")
         return "\n".join(lines)
 
 

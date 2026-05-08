@@ -29,7 +29,8 @@ from tau2.orchestrator.orchestrator import Orchestrator
 from tau2.registry import registry
 from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
-from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+# NOTE: Commented out to run without voice extras (using local import instead)
+# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 from tau2.user_simulation_voice_presets import (
     get_or_load_task_voice_config,
 )
@@ -270,6 +271,7 @@ def build_voice_user(
     if hallucination_feedback:
         user_instructions += f"\n\n{hallucination_feedback}"
 
+    from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
     return VoiceStreamingUserSimulator(
         tools=user_tools,
         instructions=user_instructions,

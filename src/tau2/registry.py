@@ -4,9 +4,10 @@ from typing import Callable, Dict, Optional
 from loguru import logger
 from pydantic import BaseModel
 
-from tau2.agent.discrete_time_audio_native_agent import (
-    create_discrete_time_audio_native_agent,
-)
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.discrete_time_audio_native_agent import (
+#     create_discrete_time_audio_native_agent,
+# )
 from tau2.agent.llm_agent import (
     LLMGTAgent,
     LLMSoloAgent,
@@ -22,12 +23,13 @@ from tau2.domains.airline.environment import get_tasks as airline_domain_get_tas
 from tau2.domains.airline.environment import (
     get_tasks_split as airline_domain_get_tasks_split,
 )
-from tau2.domains.banking_knowledge.environment import (
-    get_environment as knowledge_domain_get_environment,
-)
-from tau2.domains.banking_knowledge.environment import (
-    get_tasks as knowledge_domain_get_tasks,
-)
+# NOTE: Commented out to run without voice extras
+# from tau2.domains.banking_knowledge.environment import (
+#     get_environment as knowledge_domain_get_environment,
+# )
+# from tau2.domains.banking_knowledge.environment import (
+#     get_tasks as knowledge_domain_get_tasks,
+# )
 from tau2.domains.mock.environment import get_environment as mock_domain_get_environment
 from tau2.domains.mock.environment import get_tasks as mock_domain_get_tasks
 from tau2.domains.retail.environment import (
@@ -53,10 +55,26 @@ from tau2.domains.telecom.environment import (
 from tau2.domains.telecom.environment import (
     get_tasks_split as telecom_domain_get_tasks_split,
 )
+from tau2.domains.telecom_ja.environment import (
+    get_environment_manual_policy as telecom_ja_domain_get_environment_manual_policy,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_environment_workflow_policy as telecom_ja_domain_get_environment_workflow_policy,
+)
+from tau2.domains.telecom_ja.environment import get_tasks as telecom_ja_domain_get_tasks
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_full as telecom_ja_domain_get_tasks_full,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_small as telecom_ja_domain_get_tasks_small,
+)
+from tau2.domains.telecom_ja.environment import (
+    get_tasks_split as telecom_ja_domain_get_tasks_split,
+)
 from tau2.environment.environment import Environment
 from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
-from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 
 
 class RegistryInfo(BaseModel):
@@ -283,9 +301,10 @@ try:
     # User implementations
     registry.register_user(UserSimulator, "user_simulator")
     registry.register_user(DummyUser, "dummy_user")
-    registry.register_user(
-        VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
-    )
+    # NOTE: Commented out to run without voice extras
+    # registry.register_user(
+    #     VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
+    # )
 
     # Agent factories
     registry.register_agent_factory(create_llm_agent, "llm_agent")
@@ -300,10 +319,11 @@ try:
         task_filter=LLMSoloAgent.check_valid_task,
         metadata={"solo_mode": True},
     )
-    registry.register_agent_factory(
-        create_discrete_time_audio_native_agent,
-        "discrete_time_audio_native_agent",
-    )
+    # NOTE: Commented out to run without voice extras
+    # registry.register_agent_factory(
+    #     create_discrete_time_audio_native_agent,
+    #     "discrete_time_audio_native_agent",
+    # )
     registry.register_domain(mock_domain_get_environment, "mock")
     registry.register_tasks(mock_domain_get_tasks, "mock")
 
@@ -338,8 +358,26 @@ try:
         get_task_splits=telecom_domain_get_tasks_split,
     )
 
-    registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
-    registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
+    registry.register_domain(telecom_ja_domain_get_environment_manual_policy, "telecom_ja")
+    registry.register_domain(
+        telecom_ja_domain_get_environment_workflow_policy, "telecom_ja-workflow"
+    )
+    registry.register_tasks(telecom_ja_domain_get_tasks_full, "telecom_ja_full")
+    registry.register_tasks(telecom_ja_domain_get_tasks_small, "telecom_ja_small")
+    registry.register_tasks(
+        telecom_ja_domain_get_tasks,
+        "telecom_ja",
+        get_task_splits=telecom_ja_domain_get_tasks_split,
+    )
+    registry.register_tasks(
+        telecom_ja_domain_get_tasks,
+        "telecom_ja-workflow",
+        get_task_splits=telecom_ja_domain_get_tasks_split,
+    )
+
+    # NOTE: Commented out to run without voice extras
+    # registry.register_domain(knowledge_domain_get_environment, "banking_knowledge")
+    # registry.register_tasks(knowledge_domain_get_tasks, "banking_knowledge")
 
     logger.debug(
         f"Default components registered successfully. Registry info: {json.dumps(registry.get_info().model_dump(), indent=2)}"

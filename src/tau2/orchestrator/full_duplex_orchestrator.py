@@ -30,7 +30,8 @@ from tau2.user.user_simulator import UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser
 from tau2.utils.llm_utils import get_cost
 from tau2.utils.utils import get_now
-from tau2.voice.utils.transcript_utils import compute_proportional_user_transcripts
+# NOTE: Commented out to run without voice extras (using local import instead)
+# from tau2.voice.utils.transcript_utils import compute_proportional_user_transcripts
 
 # Type variables for generic full-duplex orchestrator
 StreamingAgentT = TypeVar("StreamingAgentT", bound=FullDuplexAgent)
@@ -627,5 +628,6 @@ class FullDuplexOrchestrator(BaseOrchestrator[StreamingAgentT, StreamingUserT, T
             SimulationRun: The simulation run.
         """
         result = super().run()
+        from tau2.voice.utils.transcript_utils import compute_proportional_user_transcripts
         compute_proportional_user_transcripts(self.ticks)
         return result

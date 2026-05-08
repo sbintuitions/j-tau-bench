@@ -1,0 +1,450 @@
+[[plans]]
+plan_id = "P1001"
+name = "Basic Plan"
+data_limit_gb = 5.0
+price_per_month = 40.0
+data_refueling_price_per_gb = 5.0
+
+[[plans]]
+plan_id = "P1002"
+name = "Premium Plan"
+data_limit_gb = 15.0
+price_per_month = 65.0
+data_refueling_price_per_gb = 2.0
+
+[[plans]]
+plan_id = "P1003"
+name = "Unlimited Plus"
+data_limit_gb = 999.0
+price_per_month = 85.0
+data_refueling_price_per_gb = 0.1
+
+[[plans]]
+plan_id = "P1004"
+name = "Family Share"
+data_limit_gb = 25.0
+price_per_month = 120.0
+data_refueling_price_per_gb = 3.0
+
+[[plans]]
+plan_id = "P1005"
+name = "IoT Basic"
+data_limit_gb = 1.0
+price_per_month = 15.0
+data_refueling_price_per_gb = 10.0
+
+[[devices]]
+device_id = "D1001"
+device_type = "スマートフォン"
+model = "Smartphone X"
+imei = "123456789012345"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-20T14:30:00"
+
+[[devices]]
+device_id = "D1002"
+device_type = "スマートフォン"
+model = "Smartphone Pro Max"
+imei = "234567890123456"
+is_esim_capable = true
+activated = true
+activation_date = "2025-02-15T11:45:00"
+last_esim_transfer_date = "2025-01-20T09:30:00"
+
+[[devices]]
+device_id = "D1003"
+device_type = "タブレット"
+model = "Tablet Ultra"
+imei = "345678901234567"
+is_esim_capable = false
+activated = true
+activation_date = "2025-01-25T16:20:00"
+
+[[devices]]
+device_id = "D1004"
+device_type = "スマートフォン"
+model = "Galaxy S23"
+imei = "456789012345678"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-10T10:15:00"
+
+[[devices]]
+device_id = "D1005"
+device_type = "スマートフォン"
+model = "Pixel 7"
+imei = "567890123456789"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-12T13:45:00"
+
+[[devices]]
+device_id = "D1006"
+device_type = "スマートフォン"
+model = "iPhone 14"
+imei = "678901234567890"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-15T09:30:00"
+
+[[devices]]
+device_id = "D1007"
+device_type = "スマートフォン"
+model = "OnePlus 11"
+imei = "789012345678901"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-18T14:20:00"
+
+[[devices]]
+device_id = "D1008"
+device_type = "タブレット"
+model = "iPad Pro"
+imei = "890123456789012"
+is_esim_capable = true
+activated = true
+activation_date = "2025-01-20T11:10:00"
+
+[[devices]]
+device_id = "D1009"
+device_type = "スマートフォン"
+model = "Smartphone Lite"
+imei = "901234567890123"
+is_esim_capable = false
+activated = true
+activation_date = "2024-12-10T15:45:00"
+
+[[lines]]
+line_id = "L1001"
+phone_number = "03-1111-2222"
+status = "有効"
+plan_id = "P1001"
+device_id = "D1001"
+data_used_gb = 3.2
+data_refueling_gb = 0.0
+roaming_enabled = false
+contract_end_date = "2026-12-31"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1002"
+phone_number = "090-1234-5678"
+status = "有効"
+plan_id = "P1002"
+device_id = "D1002"
+data_used_gb = 8.7
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2026-12-31"
+last_plan_change_date = "2024-12-15"
+last_sim_replacement_date = "2025-01-20"
+
+[[lines]]
+line_id = "L1003"
+phone_number = "03-1234-2222"
+status = "利用停止"
+plan_id = "P1001"
+device_id = "D1003"
+data_used_gb = 0.0
+data_refueling_gb = 0.0
+roaming_enabled = false
+contract_end_date = "2026-06-30"
+last_plan_change_date = "2024-10-05"
+suspension_start_date = "2025-02-01"
+
+[[lines]]
+line_id = "L1004"
+phone_number = "03-1234-3333"
+status = "有効"
+plan_id = "P1003"
+device_id = "D1004"
+data_used_gb = 15.3
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2027-02-28"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1005"
+phone_number = "03-1111-3333"
+status = "有効"
+plan_id = "P1003"
+device_id = "D1005"
+data_used_gb = 12.8
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2027-02-28"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1006"
+phone_number = "03-1111-4444"
+status = "有効"
+plan_id = "P1003"
+device_id = "D1006"
+data_used_gb = 18.1
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2027-02-28"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1007"
+phone_number = "03-1111-5555"
+status = "有効"
+plan_id = "P1003"
+device_id = "D1007"
+data_used_gb = 9.5
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2027-02-28"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1008"
+phone_number = "03-1111-6666"
+status = "有効"
+plan_id = "P1003"
+device_id = "D1008"
+data_used_gb = 11.2
+data_refueling_gb = 0.0
+roaming_enabled = true
+contract_end_date = "2027-02-28"
+last_plan_change_date = "2025-01-10"
+
+[[lines]]
+line_id = "L1009"
+phone_number = "03-1111-7777"
+status = "利用停止"
+plan_id = "P1002"
+device_id = "D1009"
+data_used_gb = 0.0
+data_refueling_gb = 0.0
+roaming_enabled = false
+contract_end_date = "2026-08-15"
+last_plan_change_date = "2024-08-20"
+last_sim_replacement_date = "2025-01-15"
+suspension_start_date = "2025-01-15"
+
+[[customers]]
+customer_id = "C1001"
+full_name = "田中太郎"
+date_of_birth = "1985-06-15"
+email = "tanaka.taro@example.com"
+phone_number = "090-1234-5678"
+account_status = "有効"
+created_at = "2025-01-15T10:30:00"
+goodwill_credit_used_this_year = 25.0
+line_ids = ["L1001", "L1002", "L1003"]
+bill_ids = ["B1001", "B1002", "B1003"]
+[[customers.payment_methods]]
+method_type = "クレジットカード"
+account_number_last_4 = "1235"
+expiration_date = "12/2026"
+
+
+[customers.address]
+zip_code = "100-0001"
+state = "東京都"
+city = "千代田区"
+street = "丸の内1-2-3"
+[[customers]]
+customer_id = "C1002"
+full_name = "鈴木花子"
+date_of_birth = "1990-11-22"
+email = "suzuki.hanako@example.com"
+phone_number = "080-1234-5678"
+account_status = "有効"
+created_at = "2025-02-10T14:15:00"
+last_extension_date = "2025-01-05"
+goodwill_credit_used_this_year = 0.0
+line_ids = ["L1004", "L1005", "L1006", "L1007", "L1008"]
+bill_ids = ["B1004", "B1005"]
+[[customers.payment_methods]]
+method_type = "デビットカード"
+account_number_last_4 = "1234"
+expiration_date = "12/2026"
+
+[[customers.payment_methods]]
+method_type = "クレジットカード"
+account_number_last_4 = "5678"
+expiration_date = "06/2027"
+
+
+[customers.address]
+zip_code = "530-0001"
+state = "大阪府"
+city = "大阪市北区"
+street = "梅田3-4-5"
+[[customers]]
+customer_id = "C1003"
+full_name = "佐藤健一"
+date_of_birth = "1978-04-30"
+email = "sato.kenichi@example.com"
+phone_number = "0120-1111-2222"
+account_status = "利用停止"
+created_at = "2024-12-05T09:45:00"
+goodwill_credit_used_this_year = 50.0
+line_ids = ["L1009"]
+bill_ids = ["B1006"]
+[[customers.payment_methods]]
+method_type = "PayPal"
+account_number_last_4 = "5555"
+expiration_date = "06/2025"
+
+
+[customers.address]
+zip_code = "812-0011"
+state = "福岡県"
+city = "福岡市博多区"
+street = "博多駅前2-6-7"
+[[customers]]
+customer_id = "C1004"
+full_name = "高橋美咲"
+date_of_birth = "1995-08-17"
+email = "takahashi.misaki@example.com"
+phone_number = "090-1234-9876"
+account_status = "確認待ち"
+created_at = "2025-01-25T16:20:00"
+goodwill_credit_used_this_year = 0.0
+payment_methods = []
+line_ids = []
+bill_ids = []
+
+[customers.address]
+zip_code = "460-0008"
+state = "愛知県"
+city = "名古屋市中区"
+street = "栄3-8-9"
+[[bills]]
+bill_id = "B1001"
+customer_id = "C1001"
+period_start = "2025-01-01"
+period_end = "2025-01-31"
+issue_date = "2025-01-05"
+total_due = 160.5
+due_date = "2025-01-19"
+status = "支払い済み"
+[[bills.line_items]]
+description = "Basic Plan - 電話番号 03-1111-2222"
+amount = 40.0
+date = "2025-01-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "Premium Plan - 電話番号 090-1234-5678"
+amount = 65.0
+date = "2025-01-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "Basic Plan - 電話番号 03-1234-2222"
+amount = 40.0
+date = "2025-01-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "データ超過 - 電話番号 090-1234-5678"
+amount = 15.5
+date = "2025-01-05"
+item_type = "超過料金"
+
+
+[[bills]]
+bill_id = "B1002"
+customer_id = "C1001"
+period_start = "2025-02-01"
+period_end = "2025-02-28"
+issue_date = "2025-02-05"
+total_due = 150.0
+due_date = "2025-02-19"
+status = "発行済み"
+[[bills.line_items]]
+description = "Basic Plan - 電話番号 03-1111-2222"
+amount = 40.0
+date = "2025-02-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "Premium Plan - 電話番号 090-1234-5678"
+amount = 65.0
+date = "2025-02-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "Basic Plan - 電話番号 03-1234-2222"
+amount = 40.0
+date = "2025-02-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "利用停止手数料 - 電話番号 03-1234-2222"
+amount = 5.0
+date = "2025-02-05"
+item_type = "手数料"
+
+
+[[bills]]
+bill_id = "B1003"
+customer_id = "C1001"
+period_start = "2025-03-01"
+period_end = "2025-03-31"
+issue_date = "2025-03-01"
+total_due = 0.0
+due_date = "2025-03-15"
+status = "下書き"
+line_items = []
+
+[[bills]]
+bill_id = "B1004"
+customer_id = "C1002"
+period_start = "2025-01-01"
+period_end = "2025-01-31"
+issue_date = "2025-01-05"
+total_due = 425.0
+due_date = "2025-01-19"
+status = "支払い済み"
+[[bills.line_items]]
+description = "Unlimited Plus - 5回線ファミリープラン"
+amount = 425.0
+date = "2025-01-05"
+item_type = "プラン料金"
+
+
+[[bills]]
+bill_id = "B1005"
+customer_id = "C1002"
+period_start = "2025-02-01"
+period_end = "2025-02-28"
+issue_date = "2025-02-05"
+total_due = 425.0
+due_date = "2025-02-26"
+status = "延滞"
+[[bills.line_items]]
+description = "Unlimited Plus - 5回線ファミリープラン"
+amount = 425.0
+date = "2025-02-05"
+item_type = "プラン料金"
+
+
+[[bills]]
+bill_id = "B1006"
+customer_id = "C1003"
+period_start = "2025-02-01"
+period_end = "2025-02-28"
+issue_date = "2025-02-05"
+total_due = 70.0
+due_date = "2025-02-19"
+status = "係争中"
+[[bills.line_items]]
+description = "Premium Plan - 電話番号 03-1111-7777"
+amount = 65.0
+date = "2025-02-05"
+item_type = "プラン料金"
+
+[[bills.line_items]]
+description = "利用停止手数料 - 電話番号 03-1111-7777"
+amount = 5.0
+date = "2025-02-05"
+item_type = "手数料"

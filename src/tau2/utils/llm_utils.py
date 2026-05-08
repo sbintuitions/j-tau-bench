@@ -126,7 +126,7 @@ def get_response_cost(response: ModelResponse) -> float:
     try:
         cost = completion_cost(completion_response=response)
     except Exception as e:
-        logger.error(e)
+        logger.debug(e)
         return 0.0
     return cost
 
@@ -182,7 +182,7 @@ def to_litellm_messages(messages: list[Message]) -> list[dict]:
                         "name": tc.name,
                         "function": {
                             "name": tc.name,
-                            "arguments": json.dumps(tc.arguments),
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False),
                         },
                         "type": "function",
                     }

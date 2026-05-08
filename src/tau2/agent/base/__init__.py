@@ -11,22 +11,22 @@ import warnings
 # LLM configuration mixin
 from tau2.agent.base.llm_config import LLMConfigMixin
 
-# Protocol base classes
-from tau2.agent.base.participant import (
-    FullDuplexParticipant,
-    HalfDuplexParticipant,
-    VoiceParticipantMixin,
-)
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.base.participant import (
+#     FullDuplexParticipant,
+#     HalfDuplexParticipant,
+#     VoiceParticipantMixin,
+# )
 
-# Streaming components
-from tau2.agent.base.streaming import (
-    AudioChunkingMixin,
-    BasicActionType,
-    StreamingMixin,
-    StreamingState,
-    basic_turn_taking_policy,
-    merge_homogeneous_chunks,
-)
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.base.streaming import (
+#     AudioChunkingMixin,
+#     BasicActionType,
+#     StreamingMixin,
+#     StreamingState,
+#     basic_turn_taking_policy,
+#     merge_homogeneous_chunks,
+# )
 
 # Streaming utilities for audio script gold processing
 from tau2.agent.base.streaming_utils import (
@@ -39,8 +39,8 @@ from tau2.agent.base.streaming_utils import (
     merge_audio_script_gold,
 )
 
-# Voice components
-from tau2.agent.base.voice import VoiceMixin, VoiceState
+# NOTE: Commented out to run without voice extras
+# from tau2.agent.base.voice import VoiceMixin, VoiceState
 
 # =============================================================================
 # DEPRECATION ALIASES
@@ -62,24 +62,26 @@ def _deprecated_alias(old_name: str, new_name: str, new_class):
 
     return __getattr__
 
-
+# NOTE: Commented out to run without voice extras
 # Deprecated aliases for backward compatibility
-BaseConversationParticipant = HalfDuplexParticipant
-BaseStreamingParticipant = FullDuplexParticipant
-BaseVoiceParticipant = VoiceParticipantMixin
+# BaseConversationParticipant = HalfDuplexParticipant
+# BaseStreamingParticipant = FullDuplexParticipant
+# BaseVoiceParticipant = VoiceParticipantMixin
 
 
 __all__ = [
+    # NOTE: Commented out to run without voice extras
     # Protocol base classes
-    "HalfDuplexParticipant",
-    "FullDuplexParticipant",
-    "VoiceParticipantMixin",
+    # "HalfDuplexParticipant",
+    # "FullDuplexParticipant",
+    # "VoiceParticipantMixin",
     # LLM configuration
     "LLMConfigMixin",
+    # NOTE: Commented out to run without voice extras
     # Streaming components
-    "StreamingMixin",
-    "StreamingState",
-    "AudioChunkingMixin",
+    # "StreamingMixin",
+    # "StreamingState",
+    # "AudioChunkingMixin",
     "BasicActionType",
     "basic_turn_taking_policy",
     "merge_homogeneous_chunks",
@@ -91,9 +93,10 @@ __all__ = [
     "extract_gold_text",
     "extract_chunks_with_text",
     "format_transcript_comparison",
+    # NOTE: Commented out to run without voice extras
     # Voice components
-    "VoiceMixin",
-    "VoiceState",
+    # "VoiceMixin",
+    # "VoiceState",
     # Deprecated aliases (kept for backward compatibility)
     "BaseConversationParticipant",
     "BaseStreamingParticipant",

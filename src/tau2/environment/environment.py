@@ -409,7 +409,7 @@ class Environment:
                 raise ValueError(f"Unsupported type: {type(resp)}")
 
         if not isinstance(resp, str):
-            return json.dumps(_process(resp), default=str)  # FIXME: add default=str
+            return json.dumps(_process(resp), default=str, ensure_ascii=False)  # FIXME: add default=str
         return resp
 
     def set_solo_mode(self, solo_mode: bool):

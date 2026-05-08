@@ -39,7 +39,10 @@ from tau2.data_model.simulation import (
     TextRunConfig,
     VoiceRunConfig,
 )
-from tau2.domains.banking_knowledge.retrieval import get_all_variant_names
+# NOTE: Commented out to run without knowledge extras
+# from tau2.domains.banking_knowledge.retrieval import get_all_variant_names
+def get_all_variant_names():
+    return []
 from tau2.run import get_options, run_domain
 from tau2.scripts.leaderboard.verify_trajectories import VerificationMode
 

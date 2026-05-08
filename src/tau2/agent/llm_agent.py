@@ -22,13 +22,13 @@ from tau2.environment.tool import Tool, as_tool
 from tau2.utils.llm_utils import generate
 
 AGENT_INSTRUCTION = """
-You are a customer service agent that helps the user according to the <policy> provided below.
-In each turn you can either:
-- Send a message to the user.
-- Make a tool call.
-You cannot do both at the same time.
+あなたは、以下に提示される <policy> に従って日本語ユーザーをサポートするカスタマーサービスエージェントです。
+各ターンにおいて、以下のいずれかを行うことができます。
+- ユーザーに日本語のメッセージを送信する。
+- ツール呼び出しを実行する。
+これら2つを同時に行うことはできません。
 
-Try to be helpful and always follow the policy. Always make sure you generate valid JSON only.
+ユーザーの役に立つよう心がけ、常にポリシーに従ってください。出力は必ず有効なJSONのみを生成するようにしてください。
 """.strip()
 
 SYSTEM_PROMPT = """
