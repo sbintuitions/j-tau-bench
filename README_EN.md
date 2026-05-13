@@ -55,7 +55,7 @@ tau-bench is released under the [MIT License](https://github.com/sierra-research
 
 ```
 @misc{j-tau-telecom-2026,
-  author       = {Chihiro, Yano and Jun, Hirako},
+  author       = {Chihiro, Yano and Jun, Hirako and Ryota, Hirobuchi},
   title    = {J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains},
   url = {https://github.com/sbintuitions/j-tau-bench},
   howpublished = {\url{https://github.com/sbintuitions/j-tau-bench}},
