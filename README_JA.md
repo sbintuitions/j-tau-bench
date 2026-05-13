@@ -53,4 +53,4 @@ tau2 run \
 
 ## ライセンス
 
-[Modified MIT License](LICENSE)
+[Modified-MIT License](LICENSE)
