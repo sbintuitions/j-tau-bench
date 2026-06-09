@@ -1,12 +1,14 @@
 # J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains
 
+🚀[リリースブログ]()
+
 本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) の日本語版フォークです。
 
 ## 概要
 J-tauは、カスタマーサービスエージェントをシミュレーション環境で評価するためのフレームワークです。ポリシーに従ったツール使用・ユーザー対話の正確さを測定します。
 
 > [!IMPORTANT]
-> 本リポジトリでは現在、`telecom`ドメインの日本語版、 `telecom_ja` のみを評価対象として利用可能です。
+> 本リポジトリでは現在、`telecom_ja` のみを評価対象として利用可能です。その他の英語ドメインを評価する場合は、オリジナルの[tau-bench](https://github.com/sierra-research/tau2-bench)を利用してください。
 
 ## クイックスタート
 
@@ -32,7 +34,6 @@ cp .env.example .env
 ### 3. 評価の実行
 
 ```bash
-# 日本語ドメイン（telecom_ja）で実行
 tau2 run \
   --domain telecom_ja \
   --agent-llm <llm_name> \
