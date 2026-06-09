@@ -349,7 +349,7 @@ def _write_llm_log(
 
     # Write to file with indentation
     with open(log_file, "w", encoding="utf-8") as f:
-        json.dump(call_data, f, indent=2)
+        json.dump(call_data, f, indent=2, ensure_ascii=False)
 
 
 def generate(
