@@ -48,10 +48,10 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_customer_by_phone(self, phone_number: str) -> Customer:
         """
-        Finds a customer by their primary contact or line phone number.
+        主連絡先または電話番号で顧客を検索します。
 
         Args:
-            phone_number: The phone number to search for.
+            phone_number: 検索する電話番号。
 
         Returns:
             Customer object if found, None otherwise.
@@ -72,10 +72,10 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_customer_by_id(self, customer_id: str) -> Customer:
         """
-        Retrieves a customer directly by their unique ID.
+        顧客IDで顧客情報を取得します。
 
         Args:
-            customer_id: The unique identifier of the customer.
+            customer_id: 顧客の一意の識別子。
 
         Returns:
             Customer object if found, None otherwise.
@@ -89,12 +89,11 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_customer_by_name(self, full_name: str, dob: str) -> List[Customer]:
         """
-        Searches for customers by name and DOB. May return multiple matches if names are similar,
-        DOB helps disambiguate.
+        氏名と生年月日で顧客を検索します。同姓同名などの場合は複数該当することがありますが、生年月日を指定することで（同一人物かどうかの）識別が可能です。
 
         Args:
-            full_name: The full name of the customer.
-            dob: Date of birth for verification, in the format YYYY-MM-DD.
+            full_name: 顧客のフルネーム。
+            dob: 本人確認用の生年月日（YYYY-MM-DD形式）。
 
         Returns:
             List of matching Customer objects.
@@ -233,11 +232,12 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_details_by_id(self, id: str) -> Dict[str, Any]:
         """
-        Retrieves the details for a given ID.
-        The ID must be a valid ID for a Customer, Line, Device, Bill, or Plan.
+        指定されたIDの詳細情報を取得します。
+
+        IDは、顧客（Customer）、回線（Line）、端末（Device）、請求（Bill）、またはプラン（Plan）のいずれかの有効なIDである必要があります。
 
         Args:
-            id: The ID of the object to retrieve.
+            id: 取得対象のオブジェクトのID。
 
         Returns:
             The object corresponding to the ID.
@@ -263,14 +263,15 @@ class TelecomTools(ToolKitBase):
         self, customer_id: str, line_id: str, reason: str
     ) -> Dict[str, Any]:
         """
-        Suspends a specific line (max 6 months).
-        Checks: Line status must be Active.
-        Logic: Sets line status to Suspended, records suspension_start_date.
+        指定した回線を利用停止にします（最大6か月）。
+
+        前提条件：回線のステータスが「有効」であること。
+        処理内容：回線ステータスを「利用停止」に設定し、利用停止開始日を記録します。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to suspend.
-            reason: Reason for suspension.
+            customer_id: 回線を所有する顧客のID。
+            line_id: 利用停止にする回線のID。
+            reason: 利用停止の理由。
 
         Returns:
             Dictionary with success status, message, and updated line if applicable.
@@ -297,13 +298,14 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def resume_line(self, customer_id: str, line_id: str) -> Dict[str, Any]:
         """
-        Resumes a suspended line.
-        Checks: Line status must be Suspended or Pending Activation.
-        Logic: Sets line status to Active, clears suspension_start_date.
+        利用停止中の回線を再開します。
+
+        前提条件：回線のステータスが「利用停止」または「有効化待ち」であること。
+        処理内容：回線ステータスを「有効」に設定し、利用停止開始日をクリアします。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to resume.
+            customer_id: 回線を所有する顧客のID。
+            line_id: 再開する回線のID。
 
         Returns:
             Dictionary with success status, message, and updated line if applicable.
@@ -334,11 +336,11 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_bills_for_customer(self, customer_id: str, limit: int = 12) -> List[Bill]:
         """
-        Retrieves a list of the customer's bills, most recent first.
+        顧客の請求書一覧を新しい順に取得します。
 
         Args:
-            customer_id: ID of the customer.
-            limit: Maximum number of bills to return.
+            customer_id: 顧客のID。
+            limit: 取得する請求書の最大件数。
 
         Returns:
             List of Bill objects, ordered by issue date (newest first).
@@ -360,18 +362,19 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def send_payment_request(self, customer_id: str, bill_id: str) -> str:
         """
-        Sends a payment request to the customer for a specific bill.
-        Checks:
-            - Customer exists
-            - Bill exists and belongs to the customer
-            - No other bills are already awaiting payment for this customer
-        Logic: Sets bill status to AWAITING_PAYMENT and notifies customer.
-        Warning: This method does not check if the bill is already PAID.
-        Always check the bill status before calling this method.
+        指定した請求書の支払いリクエストを顧客に送信します。
+
+        前提条件：
+            - 顧客が存在すること
+            - 請求書が存在し、対象顧客のものであること
+            - 同顧客で既に「支払い待ち」の請求書がないこと
+        処理内容：請求書のステータスを「支払い待ち」に設定し、顧客に通知します。
+        注意：このメソッドは請求書が既に支払い済みかどうかを確認しません。
+        必ず請求書のステータスを確認してから呼び出してください。
 
         Args:
-            customer_id: ID of the customer who owns the bill.
-            bill_id: ID of the bill to send payment request for.
+            customer_id: 請求書を所有する顧客のID。
+            bill_id: 支払いリクエストを送信する請求書のID。
 
         Returns:
             Message indicating the payment request has been sent.
@@ -484,12 +487,11 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_data_usage(self, customer_id: str, line_id: str) -> Dict[str, Any]:
         """
-        Retrieves current billing cycle data usage for a line, including data
-        refueling amount, data limit, and cycle end date.
+        当月請求サイクルにおける回線のデータ使用量（データチャージ量、データ上限値、および請求サイクル終了日を含む）を取得します。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to check usage for.
+            customer_id: 回線を所有する顧客のID。
+            line_id: 使用量を確認する回線のID。
 
         Returns:
             Dictionary with usage information.
@@ -539,11 +541,11 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def enable_roaming(self, customer_id: str, line_id: str) -> Dict[str, Any]:
         """
-        Enables international roaming on a line.
+        回線の国際ローミングを有効にします。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to enable roaming for.
+            customer_id: 回線を所有する顧客のID。
+            line_id: ローミングを有効にする回線のID。
 
         Returns:
             Message indicating the roaming has been enabled.
@@ -565,11 +567,11 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def disable_roaming(self, customer_id: str, line_id: str) -> str:
         """
-        Disables international roaming on a line.
+        回線の国際ローミングを無効にします。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to disable roaming for.
+            customer_id: 回線を所有する顧客のID。
+            line_id: ローミングを無効にする回線のID。
 
         Returns:
             Message indicating the roaming has been enabled.
@@ -591,13 +593,14 @@ class TelecomTools(ToolKitBase):
     @is_tool(ToolType.GENERIC)
     def transfer_to_human_agents(self, summary: str) -> str:
         """
-        Transfer the user to a human agent, with a summary of the user's issue.
-        Only transfer if
-         -  the user explicitly asks for a human agent
-         -  given the policy and the available tools, you cannot solve the user's issue.
+        ユーザーを有人オペレーターに転送します。ユーザーの問題の要約を添えてください。
+
+        以下の場合にのみ転送してください：
+         - ユーザーが明示的に有人オペレーターを求めた場合
+         - ポリシーと利用可能なツールでは問題を解決できない場合
 
         Args:
-            summary: A summary of the user's issue.
+            summary: ユーザーの問題の要約。
 
         Returns:
             A message indicating the user has been transferred to a human agent.
@@ -609,14 +612,15 @@ class TelecomTools(ToolKitBase):
         self, customer_id: str, line_id: str, gb_amount: float
     ) -> Dict[str, Any]:
         """
-        Refuels data for a specific line, adding to the customer's bill.
-        Checks: Line status must be Active, Customer owns the line.
-        Logic: Adds data to the line and charges customer based on the plan's refueling rate.
+        指定した回線にデータを追加チャージし、顧客の請求に加算します。
+
+        前提条件：回線のステータスが「有効」で、顧客が回線を所有していること。
+        処理内容：回線にデータを追加し、プランのチャージ単価に基づいて請求します。
 
         Args:
-            customer_id: ID of the customer who owns the line.
-            line_id: ID of the line to refuel data for.
-            gb_amount: Amount of data to add in gigabytes.
+            customer_id: 回線を所有する顧客のID。
+            line_id: データを追加する回線のID。
+            gb_amount: 追加するデータ量（GB単位）。
 
         Returns:
             Dictionary with success status, message, charge amount, and updated line if applicable.
