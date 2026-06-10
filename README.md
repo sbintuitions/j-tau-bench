@@ -1,7 +1,5 @@
 # J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains
 
-🚀[リリースブログ]()
-
 本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) の日本語版フォークです。
 
 ## 概要

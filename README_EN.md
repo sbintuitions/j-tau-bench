@@ -2,8 +2,6 @@
 
 This repository is a Japanese-language fork of [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench).
 
-🚀 [Release Blog]() · 📦 [Original Repository](https://github.com/sierra-research/tau2-bench)
-
 ## Overview
 
 J-tau is a framework for evaluating customer service agents in a simulated environment. It measures accuracy in tool use and user interaction according to defined policies.
