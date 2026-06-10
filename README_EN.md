@@ -1,5 +1,7 @@
 # J-tau: A Japanese tau-bench for Benchmarking Tool-Agent-User Interaction in Real-World Domains
 
+[![日本語 README](https://img.shields.io/badge/README-%E6%97%A5%E6%9C%AC%E8%AA%9E-red)](README.md)
+
 ## Overview
 
 J-tau is a benchmark for evaluating agent capabilities in Japanese.
@@ -57,10 +59,10 @@ To evaluate a model served with vLLM, specify the model name and `api_base` foll
 ```bash
 uv run tau2 run \
   --domain telecom_ja \
-  --agent-llm hosted_vllm/{AGENT_MODEL_NAME} \
-  --agent-llm-args '{"api_base": {AGENT_API_BASE}}' \
-  --user-llm hosted_vllm/{USER_MODEL_NAME} \
-  --user-llm-args '{"api_base": {USER_API_BASE}}' \
+  --agent-llm hosted_vllm/<agent_model_name> \
+  --agent-llm-args '{"api_base": <agent_api_base>}' \
+  --user-llm hosted_vllm/<user_model_name> \
+  --user-llm-args '{"api_base": <user_api_base>}' \
   --num-trials 1
 ```
 
@@ -76,9 +78,9 @@ tau-bench is released under the [MIT License](https://github.com/sierra-research
 ## Citation
 
 ```
-@misc{j-tau-telecom-2026,
+@misc{j-tau-2026,
   author       = {Chihiro, Yano and Jun, Hirako and Ryota, Hirobuchi},
-  title    = {J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains},
+  title    = {J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains},
   url = {https://github.com/sbintuitions/j-tau-bench},
   howpublished = {\url{https://github.com/sbintuitions/j-tau-bench}},
   year     = {2026},

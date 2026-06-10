@@ -1,5 +1,7 @@
 # J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains
 
+[![English README](https://img.shields.io/badge/README-English-blue)](README_EN.md)
+
 ## 概要
 
 J-tauは日本語エージェント能力を評価するベンチマークです。
@@ -55,10 +57,10 @@ vLLM でサーブしたモデルを利用する場合は、LiteLLM形式に従�
 ```bash
 uv run tau2 run \
   --domain telecom_ja \
-  --agent-llm hosted_vllm/{AGENT_MODEL_NAME} \
-  --agent-llm-args '{"api_base": {AGENT_API_BASE}}' \
-  --user-llm hosted_vllm/{USER_MODEL_NAME} \
-  --user-llm-args '{"api_base": {USER_API_BASE}}' \
+  --agent-llm hosted_vllm/<agent_model_name> \
+  --agent-llm-args '{"api_base": <agent_api_base>}' \
+  --user-llm hosted_vllm/<user_model_name> \
+  --user-llm-args '{"api_base": <user_api_base>}' \
   --num-trials 1
 ```
 
@@ -70,15 +72,15 @@ uv run tau2 run \
 [Modified MIT License](LICENSE)
 
 ## 謝辞
-このベンチマークは[tau-bench](https://github.com/sierra-research/tau2-bench)をもとに作成しました。
-tau-benchは[MITライセンス](https://github.com/sierra-research/tau-bench/blob/main/LICENSE)で公開されています。
+優れた評価フレームワークを提供してくださった [tau-bench](https://github.com/sierra-research/tau2-bench) プロジェクトに感謝します。
+tau-bench は [MIT ライセンス](https://github.com/sierra-research/tau-bench/blob/main/LICENSE) のもとで公開されています。
 
 ## 引用
 
 ```
-@misc{j-tau-telecom-2026,
+@misc{j-tau-2026,
   author       = {Chihiro, Yano and Jun, Hirako and Ryota, Hirobuchi},
-  title    = {J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains},
+  title    = {J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains},
   url = {https://github.com/sbintuitions/j-tau-bench},
   howpublished = {\url{https://github.com/sbintuitions/j-tau-bench}},
   year     = {2026},
