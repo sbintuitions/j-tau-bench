@@ -1,12 +1,18 @@
-# J-tau: A Japanese Benchmark for Tool-Agent-User Interaction in Real-World Domains
+# J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains
 
-本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) の日本語版フォークです。
+J-tauは日本語環境に特化したエージェント能力の評価ベンチマークです。
 
 ## 概要
-J-tauは、カスタマーサービスエージェントをシミュレーション環境で評価するためのフレームワークです。ポリシーに従ったツール使用・ユーザー対話の正確さを測定します。
+
+J-tauは、カスタマーサービスエージェントを評価するためのシミュレーションフレームワークです。ポリシーに従ったツール使用・ユーザー対話の正確さを測定します。
+
 
 > [!IMPORTANT]
-> 本リポジトリでは現在、`telecom_ja` のみを評価対象として利用可能です。その他の英語ドメインを評価する場合は、オリジナルの[tau-bench](https://github.com/sierra-research/tau2-bench)を利用してください。
+> 本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench)を元に作成された日本語版で、現在`telecom_ja` のみを評価対象として利用可能です。その他のドメインを英語で評価する場合は、オリジナルリポジトリを利用してください。
+
+## 対応ドメイン
+### telecom_ja
+通信事業のカスタマーサポートを題材としたドメインで、エージェントはユーザーの情報にアクセスしつつ、ユーザーに自身の端末を操作するよう指示を行う必要があります。
 
 ## クイックスタート
 
@@ -32,7 +38,7 @@ cp .env.example .env
 ### 3. 評価の実行
 
 ```bash
-tau2 run \
+uv run tau2 run \
   --domain telecom_ja \
   --agent-llm <llm_name> \
   --user-llm <llm_name> \
@@ -40,7 +46,7 @@ tau2 run \
   --num-tasks 5
 ```
 
-結果は `data/simulations/` に保存されます。`tau2 view` で閲覧できます。
+結果は `data/simulations/` に保存されます。`uv run tau2 view` で閲覧できます。
 
 <!-- ## `telecom_ja` ドメイン
 
@@ -54,7 +60,8 @@ tau2 run \
 [Modified MIT License](LICENSE)
 
 ## 謝辞
-優れた評価フレームワークを提供するtau-benchに感謝を申し上げます。
+このベンチマークは[tau-bench](https://github.com/sierra-research/tau2-bench)をもとに作成しました。
+
 tau-benchは[MITライセンス](https://github.com/sierra-research/tau-bench/blob/main/LICENSE)で公開されています。
 
 ## 引用
@@ -66,7 +73,6 @@ tau-benchは[MITライセンス](https://github.com/sierra-research/tau-bench/bl
   url = {https://github.com/sbintuitions/j-tau-bench},
   howpublished = {\url{https://github.com/sbintuitions/j-tau-bench}},
   year     = {2026},
-  version  = {v202605}
+  version  = {v202606}
 }
 ```
-
