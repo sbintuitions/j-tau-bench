@@ -1,14 +1,12 @@
 # J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains
 
-J-tauは日本語環境に特化したエージェント能力の評価ベンチマークです。
-
 ## 概要
 
-J-tauは、カスタマーサービスエージェントを評価するためのシミュレーションフレームワークです。ポリシーに従ったツール使用・ユーザー対話の正確さを測定します。
+J-tauは日本語エージェント能力を評価するベンチマークです。
+カスタマーサービスシナリオの中で、ポリシーに従ってツール使用・ユーザー対話を正確に行う能力を測定します。
 
 
-> [!IMPORTANT]
-> 本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench)を元に作成された日本語版で、現在`telecom_ja` のみを評価対象として利用可能です。その他のドメインを英語で評価する場合は、オリジナルリポジトリを利用してください。
+本リポジトリは [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench)を元に作成された日本語版で、現在`telecom_ja` のみを評価対象として利用可能です。その他のドメインを英語で評価する場合は、オリジナルリポジトリを利用してください。
 
 ## 対応ドメイン
 ### telecom_ja
@@ -22,13 +20,11 @@ J-tauは、カスタマーサービスエージェントを評価するための
 
 ```bash
 git clone https://github.com/sbintuitions/j-tau-bench.git
-cd j-tau2-bench
+cd j-tau-bench
 uv sync
 ```
 
 ### 2. APIキーの設定
-
-[LiteLLM](https://docs.litellm.ai/docs/providers) 経由で各種プロバイダーに対応しています。
 
 ```bash
 cp .env.example .env
@@ -37,31 +33,44 @@ cp .env.example .env
 
 ### 3. 評価の実行
 
+
 ```bash
 uv run tau2 run \
   --domain telecom_ja \
   --agent-llm <llm_name> \
   --user-llm <llm_name> \
-  --num-trials 1 \
-  --num-tasks 5
+  --num-trials 1
 ```
+| 引数 | 説明 |
+|------|------|
+| `--agent-llm` | エージェントに使用するLLM（[LiteLLM形式](https://docs.litellm.ai/docs/providers)で指定） |
+| `--agent-llm-args` | エージェントLLMに渡す追加引数（JSON形式）。`api_base` 等も指定可 |
+| `--user-llm` | ユーザーシミュレーターに使用するLLM |
+| `--user-llm-args` | ユーザーシミュレーターLLMに渡す追加引数（JSON形式） |
+| `--num-trials` | 各タスクの試行回数 |
+| `--num-tasks` | 実行するタスク数 |
+
+vLLM でサーブしたモデルを利用する場合は、LiteLLM形式に従い、以下のようにモデル名と`api_base`を指定します。
+
+```bash
+uv run tau2 run \
+  --domain telecom_ja \
+  --agent-llm hosted_vllm/{AGENT_MODEL_NAME} \
+  --agent-llm-args '{"api_base": {AGENT_API_BASE}}' \
+  --user-llm hosted_vllm/{USER_MODEL_NAME} \
+  --user-llm-args '{"api_base": {USER_API_BASE}}' \
+  --num-trials 1
+```
+
 
 結果は `data/simulations/` に保存されます。`uv run tau2 view` で閲覧できます。
 
-<!-- ## `telecom_ja` ドメイン
-
-`telecom` ドメインをベースに、日本語環境向けにローカライズしたドメインです。 -->
-
-<!-- - **ポリシー・マニュアル・ワークフロー** — 全文を自然な日本語に翻訳
-- **顧客データ** — 日本人名、日本の住所、日本の電話番号に変更
-- **用語の統一** — 「セルラー通信」→「モバイル通信」など、日本の通信業界で一般的な表現に統一 -->
 
 ## ライセンス
 [Modified MIT License](LICENSE)
 
 ## 謝辞
 このベンチマークは[tau-bench](https://github.com/sierra-research/tau2-bench)をもとに作成しました。
-
 tau-benchは[MITライセンス](https://github.com/sierra-research/tau-bench/blob/main/LICENSE)で公開されています。
 
 ## 引用

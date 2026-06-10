@@ -1,13 +1,11 @@
 # J-tau: A Japanese tau-bench for Benchmarking Tool-Agent-User Interaction in Real-World Domains
 
-J-tau is a benchmark specialized for evaluating agent capabilities in Japanese.
-
 ## Overview
 
-J-tau is a simulation framework for evaluating customer service agents. It measures accuracy in tool use and user interaction according to defined policies.
+J-tau is a benchmark for evaluating agent capabilities in Japanese.
+It measures accuracy in tool use and user interaction according to defined policies in customer service scenarios.
 
-> [!IMPORTANT]
-> This repository is a Japanese version based on [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench), and currently supports evaluation only for `telecom_ja`. For evaluating other English domains, please use the original repository.
+This repository is a Japanese version based on [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench), and currently supports evaluation only for `telecom_ja`. For evaluating other English domains, please use the original repository.
 
 ## Supported Domains
 
@@ -22,7 +20,7 @@ Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 git clone https://github.com/sbintuitions/j-tau-bench.git
-cd j-tau2-bench
+cd j-tau-bench
 uv sync
 ```
 
@@ -42,8 +40,28 @@ uv run tau2 run \
   --domain telecom_ja \
   --agent-llm <llm_name> \
   --user-llm <llm_name> \
-  --num-trials 1 \
-  --num-tasks 5
+  --num-trials 1
+```
+
+| Argument | Description |
+|----------|-------------|
+| `--agent-llm` | LLM for the agent (specified in [LiteLLM format](https://docs.litellm.ai/docs/providers)) |
+| `--agent-llm-args` | Additional arguments for the agent LLM (JSON). Can include `api_base`, etc. |
+| `--user-llm` | LLM for the user simulator |
+| `--user-llm-args` | Additional arguments for the user simulator LLM (JSON) |
+| `--num-trials` | Number of trials per task |
+| `--num-tasks` | Number of tasks to run |
+
+To evaluate a model served with vLLM, specify the model name and `api_base` following the LiteLLM format:
+
+```bash
+uv run tau2 run \
+  --domain telecom_ja \
+  --agent-llm hosted_vllm/{AGENT_MODEL_NAME} \
+  --agent-llm-args '{"api_base": {AGENT_API_BASE}}' \
+  --user-llm hosted_vllm/{USER_MODEL_NAME} \
+  --user-llm-args '{"api_base": {USER_API_BASE}}' \
+  --num-trials 1
 ```
 
 Results are saved to `data/simulations/` and can be viewed with `uv run tau2 view`.
