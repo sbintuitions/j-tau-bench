@@ -72,7 +72,7 @@ Results are saved to `data/simulations/` and can be viewed with `uv run tau2 vie
 [Modified MIT License](LICENSE)
 
 ## Acknowledgements
-We thank the tau-bench project for providing an excellent evaluation framework.
+We thank the [tau-bench](https://github.com/sierra-research/tau2-bench) project for providing an excellent evaluation framework.
 tau-bench is released under the [MIT License](https://github.com/sierra-research/tau-bench/blob/main/LICENSE).
 
 ## Citation
