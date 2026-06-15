@@ -17,7 +17,6 @@ from tau2.config import (
     DEFAULT_GEMINI_INPUT_SAMPLE_RATE,
     DEFAULT_GEMINI_LOCATION,
     DEFAULT_GEMINI_MODEL,
-    DEFAULT_GEMINI_MODEL_VERTEX,
     DEFAULT_GEMINI_OUTPUT_SAMPLE_RATE,
     DEFAULT_GEMINI_PROACTIVE_AUDIO,
     DEFAULT_GEMINI_VOICE,
@@ -84,7 +83,6 @@ class GeminiLiveProvider:
 
     Attributes:
         DEFAULT_MODEL: The default model for AI Studio.
-        DEFAULT_MODEL_VERTEX: The default model for Vertex AI.
         api_key: The Gemini API key (if using API key auth).
         use_vertex_ai: Whether using Vertex AI with service account.
         model: The model identifier for the session.
@@ -114,14 +112,34 @@ class GeminiLiveProvider:
     """
 
     DEFAULT_MODEL = DEFAULT_GEMINI_MODEL
-    DEFAULT_MODEL_VERTEX = DEFAULT_GEMINI_MODEL_VERTEX
     DEFAULT_VOICE = DEFAULT_GEMINI_VOICE
     DEFAULT_LOCATION = DEFAULT_GEMINI_LOCATION
+
+    @staticmethod
+    def _is_gemini_31(model: str) -> bool:
+        """Return whether this is a Gemini 3.1 model."""
+        return "gemini-3.1" in model.lower()
+
+    @staticmethod
+    def _supports_proactive_audio(model: str) -> bool:
+        """Return whether the given Gemini model supports proactive audio."""
+        return not GeminiLiveProvider._is_gemini_31(model)
+
+    @staticmethod
+    def _supports_input_audio_transcription(model: str) -> bool:
+        """Return whether the given Gemini model supports input transcription."""
+        return not GeminiLiveProvider._is_gemini_31(model)
+
+    @staticmethod
+    def _uses_eap_input_path(model: str) -> bool:
+        """Return whether the model should use the Gemini 3.1 input path."""
+        return GeminiLiveProvider._is_gemini_31(model)
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
         project_id: Optional[str] = None,
         location: Optional[str] = None,
         use_raw_json_schema: bool = True,
@@ -214,7 +232,7 @@ class GeminiLiveProvider:
             self._temp_creds_file.close()
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self._temp_creds_file.name
 
-            self.model = model or self.DEFAULT_MODEL_VERTEX
+            self.model = model or self.DEFAULT_MODEL
             logger.info(
                 f"Using Vertex AI with service account JSON "
                 f"(project={self.project_id}, location={self.location})"
@@ -244,7 +262,7 @@ class GeminiLiveProvider:
                     "Set GOOGLE_CLOUD_PROJECT env var to your GCP project ID."
                 )
 
-            self.model = model or self.DEFAULT_MODEL_VERTEX
+            self.model = model or self.DEFAULT_MODEL
             logger.info(
                 f"Using Vertex AI with service account file "
                 f"(project={self.project_id}, location={self.location})"
@@ -257,6 +275,8 @@ class GeminiLiveProvider:
                 "  - GOOGLE_SERVICE_ACCOUNT_KEY (JSON content for Vertex AI)\n"
                 "  - GOOGLE_APPLICATION_CREDENTIALS (file path for Vertex AI)"
             )
+
+        self.reasoning_effort = reasoning_effort
 
         self._client = None
         self._session = None
@@ -422,11 +442,13 @@ class GeminiLiveProvider:
                     f"{[t.name for t in tool_declarations]}"
                 )
 
-            # Enable context window compression for long sessions.
-            # Leave parameters unset so the API uses model-dependent defaults.
-            config_kwargs["context_window_compression"] = (
-                types.ContextWindowCompressionConfig()
-            )
+            # Gemini 3.1 audio EAP does not support context window compression.
+            if not self._uses_eap_input_path(self.model):
+                # Enable context window compression for long sessions.
+                # Leave parameters unset so the API uses model-dependent defaults.
+                config_kwargs["context_window_compression"] = (
+                    types.ContextWindowCompressionConfig()
+                )
 
             # Add session resumption config (enables receiving resumption handles)
             if self._max_resumptions > 0:
@@ -439,8 +461,10 @@ class GeminiLiveProvider:
                         f"({self._resumption_count}/{self._max_resumptions})"
                     )
 
-            # Add input transcription config if enabled
-            if vad_config.enable_input_transcription:
+            # Gemini 3.1 audio EAP currently supports output transcription only.
+            if vad_config.enable_input_transcription and (
+                self._supports_input_audio_transcription(self.model)
+            ):
                 config_kwargs["input_audio_transcription"] = (
                     types.AudioTranscriptionConfig()
                 )
@@ -450,10 +474,17 @@ class GeminiLiveProvider:
                 types.AudioTranscriptionConfig()
             )
 
-            # Enable proactive audio to allow model to ignore irrelevant input
-            if DEFAULT_GEMINI_PROACTIVE_AUDIO:
+            # Gemini 3.1 audio EAP does not yet support proactive audio.
+            if DEFAULT_GEMINI_PROACTIVE_AUDIO and self._supports_proactive_audio(
+                self.model
+            ):
                 config_kwargs["proactivity"] = types.ProactivityConfig(
                     proactive_audio=True,
+                )
+
+            if self.reasoning_effort:
+                config_kwargs["thinking_config"] = types.ThinkingConfig(
+                    thinking_level=self.reasoning_effort.upper(),
                 )
 
             config = types.LiveConnectConfig(**config_kwargs)
@@ -481,7 +512,13 @@ class GeminiLiveProvider:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to connect to Gemini Live API: {e}")
+            logger.error(
+                "Failed to connect to Gemini Live API "
+                "(model={}, use_vertex_ai={}, details={})",
+                self.model,
+                self.use_vertex_ai,
+                self._serialize_exception_for_logging(e),
+            )
             raise RuntimeError(f"Failed to connect to Gemini Live API: {e}") from e
 
     async def disconnect(self) -> None:
@@ -750,6 +787,29 @@ class GeminiLiveProvider:
         self._item_counter += 1
         return f"gemini_item_{self._item_counter}"
 
+    def _serialize_exception_for_logging(self, error: Exception) -> Dict[str, Any]:
+        """Extract structured details from SDK and WebSocket exceptions."""
+        payload: Dict[str, Any] = {
+            "exception_type": type(error).__name__,
+            "message": str(error),
+            "args": [repr(arg) for arg in getattr(error, "args", ())],
+        }
+
+        for attr in ("code", "status", "message", "details"):
+            value = getattr(error, attr, None)
+            if value is not None:
+                payload[attr] = self._serialize_response_for_logging(value)
+
+        response = getattr(error, "response", None)
+        if response is not None:
+            payload["response_type"] = type(response).__name__
+            for attr in ("status_code", "status", "reason_phrase", "reason"):
+                value = getattr(response, attr, None)
+                if value is not None:
+                    payload[f"response_{attr}"] = value
+
+        return payload
+
     async def _start_receive_loop(self) -> None:
         """Start the background receive loop.
 
@@ -857,7 +917,14 @@ class GeminiLiveProvider:
                         "ConnectionClosed" in type(e).__name__ or code_matches
                     )
 
-                    logger.error(f"Error in receive loop: {type(e).__name__}: {e}")
+                    logger.error(
+                        "Error in receive loop "
+                        "(model={}, session_id={}, current_item_id={}, details={})",
+                        self.model,
+                        self.session_id,
+                        self._current_item_id,
+                        self._serialize_exception_for_logging(e),
+                    )
 
                     if is_connection_closed:
                         logger.warning(
@@ -968,21 +1035,6 @@ class GeminiLiveProvider:
         )
         await self._session.send_realtime_input(audio=audio_blob)
         logger.debug(f"Sent {len(audio_data)} bytes of audio")
-
-    async def send_text(self, text: str, end_of_turn: bool = True) -> None:
-        """Send a text message to the session.
-
-        Args:
-            text: The text content to send.
-            end_of_turn: If True, signals end of user's turn.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API. Call connect() first.")
-
-        await self._session.send(input=text, end_of_turn=end_of_turn)
 
     async def send_tool_response(
         self,
@@ -1155,17 +1207,6 @@ class GeminiLiveProvider:
         Returns:
             List of typed event objects.
         """
-        # Log the full response structure (with audio data replaced by size)
-        try:
-            serialized = self._serialize_response_for_logging(response)
-            import json
-
-            logger.debug(
-                f"Gemini response: {json.dumps(serialized, indent=2, default=str)}"
-            )
-        except Exception as e:
-            logger.debug(f"Could not serialize response for logging: {e}")
-
         events: List[BaseGeminiEvent] = []
 
         audio_data = None
@@ -1304,21 +1345,12 @@ class GeminiLiveProvider:
                     )
         # If no events were extracted, return unknown event with debug info
         if not events:
-            # Collect all attributes for debugging
-            attrs = {}
-            for attr in dir(response):
-                if not attr.startswith("_"):
-                    try:
-                        val = getattr(response, attr)
-                        if not callable(val):
-                            attrs[attr] = str(type(val).__name__)
-                    except Exception:
-                        pass
-            logger.debug(f"Unknown response attributes: {attrs}")
+            response_type = type(response).__name__
+            logger.debug(f"Unknown Gemini response type: {response_type}")
             events.append(
                 GeminiUnknownEvent(
                     type="unknown",
-                    raw={"response_type": str(type(response)), "attrs": attrs},
+                    raw={"response_type": response_type},
                 )
             )
 

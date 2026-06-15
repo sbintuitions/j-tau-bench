@@ -47,7 +47,7 @@ from tau2.data_model.audio import AudioFormat
 from tau2.data_model.message import ToolCall
 from tau2.environment.tool import Tool
 from tau2.voice.audio_native.adapter import DiscreteTimeAdapter
-from tau2.voice.audio_native.livekit.audio_utils import StreamingLiveKitConverter
+from tau2.voice.audio_native.audio_converter import StreamingTelephonyConverter
 from tau2.voice.audio_native.livekit.config import CascadedConfig, DeepgramTTSConfig
 from tau2.voice.audio_native.livekit.provider import (
     CascadedEvent,
@@ -55,7 +55,7 @@ from tau2.voice.audio_native.livekit.provider import (
     CascadedVoiceProvider,
     TurnTakingConfig,
 )
-from tau2.voice.audio_native.tick_result import TickResult
+from tau2.voice.audio_native.tick_result import TickResult, UtteranceTranscript
 
 
 class LiveKitVADConfig(BaseModel):
@@ -121,21 +121,28 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
         self._tick_count = 0
         self._pending_tool_results: List[Tuple[str, str, bool]] = []
 
+        # Event queue for non-blocking tick processing.
+        # Background tasks push events here; ticks drain within their time budget.
+        self._event_queue: asyncio.Queue[CascadedEvent] = asyncio.Queue()
+
         # Audio buffering for tick alignment
         # Excess audio from one tick is carried over to the next
         self._buffered_audio_chunks: List[Tuple[bytes, Optional[str]]] = []
         self._cumulative_user_audio_ms: int = 0
 
-        # Utterance tracking for TTS audio chunks
+        # Utterance tracking for TTS audio chunks and proportional transcript
         self._utterance_counter: int = 0
+        self._utterance_transcripts: dict[str, UtteranceTranscript] = {}
+        self._current_utterance_id: Optional[str] = None
 
         # Audio format conversion (telephony ↔ internal formats)
         # TTS sample rate depends on config (Deepgram=24kHz, ElevenLabs varies)
         tts_sample_rate = 24000  # default
         if isinstance(self.cascaded_config.tts, DeepgramTTSConfig):
             tts_sample_rate = self.cascaded_config.tts.sample_rate
-        self._audio_converter = StreamingLiveKitConverter(
-            tts_sample_rate=tts_sample_rate
+        self._audio_converter = StreamingTelephonyConverter(
+            input_sample_rate=16000,
+            output_sample_rate=tts_sample_rate,
         )
 
     @property
@@ -191,6 +198,8 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             self._audio_converter.reset()
             self._buffered_audio_chunks = []
             self._tick_count = 0
+            self._utterance_transcripts.clear()
+            self._current_utterance_id = None
             logger.info(
                 f"LiveKitCascadedAdapter connected "
                 f"(tick={self.tick_duration_ms}ms, bytes_per_tick={self.bytes_per_tick})"
@@ -296,6 +305,48 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             logger.error(f"Error in run_tick (tick={tick_number}): {e}")
             raise
 
+    async def _drain_to_queue(self, async_gen) -> None:
+        """Consume an async generator and push its events to the event queue.
+
+        Runs as a background task so the tick doesn't block on slow operations
+        like LLM inference or TTS synthesis.
+        """
+        try:
+            async for event in async_gen:
+                await self._event_queue.put(event)
+        except Exception as e:
+            logger.error(f"Background pipeline error: {e}")
+            await self._event_queue.put(
+                CascadedEvent(
+                    type=CascadedEventType.ERROR,
+                    data={"error": str(e), "stage": "pipeline"},
+                )
+            )
+
+    async def _drain_event_queue(
+        self,
+        deadline: float,
+        events: List[CascadedEvent],
+        agent_audio_chunks: List[Tuple[bytes, Optional[str]]],
+        vad_events: List[str],
+        tool_calls: List[ToolCall],
+    ) -> None:
+        """Drain events from the queue until the tick deadline."""
+        loop = asyncio.get_running_loop()
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            try:
+                event = await asyncio.wait_for(
+                    self._event_queue.get(),
+                    timeout=max(0.001, remaining),
+                )
+                events.append(event)
+                self._handle_event(event, agent_audio_chunks, vad_events, tool_calls)
+            except asyncio.TimeoutError:
+                break
+
     async def _async_run_tick(
         self,
         user_audio: bytes,
@@ -303,14 +354,17 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
     ) -> TickResult:
         """Async tick execution.
 
-        Collects events from the provider and maps them to TickResult.
-        Audio is capped at bytes_per_tick, with excess buffered for next tick.
+        Spawns provider pipelines (process_audio, send_tool_result) as background
+        tasks that push events to a queue. The tick drains the queue within its
+        time budget, so slow LLM calls don't block the tick.
         """
+        tick_start = asyncio.get_running_loop().time()
+        deadline = tick_start + (self.tick_duration_ms / 1000)
+
         events: List[CascadedEvent] = []
         tool_calls: List[ToolCall] = []
         agent_audio_chunks: List[Tuple[bytes, Optional[str]]] = []
         vad_events: List[str] = []
-        transcript_for_tick = ""
 
         # Track cumulative audio for timing
         user_audio_duration_ms = (
@@ -324,24 +378,29 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             agent_audio_chunks.extend(self._buffered_audio_chunks)
             self._buffered_audio_chunks = []
 
-        # Send any pending tool results first
-        for call_id, result, _request_response in self._pending_tool_results:
-            async for event in self.provider.send_tool_result(call_id, result):
-                events.append(event)
-                self._handle_event(event, agent_audio_chunks, vad_events, tool_calls)
+        # Spawn pending tool results as background tasks
+        for call_id, result, request_response in self._pending_tool_results:
+            asyncio.create_task(
+                self._drain_to_queue(
+                    self.provider.send_tool_result(
+                        call_id, result, request_response=request_response
+                    )
+                )
+            )
         self._pending_tool_results.clear()
 
         # Convert user audio from telephony (8kHz μ-law) to STT format (16kHz PCM16)
         stt_audio = self._audio_converter.convert_input(user_audio)
 
-        # Process user audio through provider
-        async for event in self.provider.process_audio(stt_audio):
-            events.append(event)
-            self._handle_event(event, agent_audio_chunks, vad_events, tool_calls)
+        # Spawn process_audio as a background task — events go to queue
+        asyncio.create_task(
+            self._drain_to_queue(self.provider.process_audio(stt_audio))
+        )
 
-            # Accumulate transcript
-            if event.type == CascadedEventType.LLM_COMPLETED:
-                transcript_for_tick = event.text or ""
+        # Drain events from queue until tick deadline
+        await self._drain_event_queue(
+            deadline, events, agent_audio_chunks, vad_events, tool_calls
+        )
 
         # Cap audio at bytes_per_tick and buffer excess for next tick
         capped_chunks, buffered_chunks = self._cap_audio_chunks(
@@ -361,12 +420,18 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             vad_events=vad_events,
             tool_calls=tool_calls,
             agent_audio_chunks=capped_chunks,
-            proportional_transcript=transcript_for_tick,
+            proportional_transcript=self._get_proportional_transcript(capped_chunks),
             bytes_per_tick=self.bytes_per_tick,
             bytes_per_second=self.audio_format.bytes_per_second,
             tick_sim_duration_ms=self.tick_duration_ms,
             cumulative_user_audio_at_tick_start_ms=cumulative_at_tick_start,
         )
+
+        # Ensure tick takes at least tick_duration_ms wall-clock time
+        elapsed = asyncio.get_running_loop().time() - tick_start
+        remaining_time = (self.tick_duration_ms / 1000) - elapsed
+        if remaining_time > 0:
+            await asyncio.sleep(remaining_time)
 
         logger.debug(f"Tick {tick_number}: {result.summary()}")
         return result
@@ -428,26 +493,48 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             vad_events: List to append VAD event names to.
             tool_calls: List to append tool calls to.
         """
-        if event.type == CascadedEventType.TTS_AUDIO:
+        if event.type == CascadedEventType.LLM_COMPLETED:
+            # Store transcript for the current utterance for proportional
+            # distribution across ticks as audio plays back.
+            text = event.text or ""
+            if text:
+                utt_id = f"utt_{self._utterance_counter}"
+                self._current_utterance_id = utt_id
+                if utt_id not in self._utterance_transcripts:
+                    self._utterance_transcripts[utt_id] = UtteranceTranscript(
+                        item_id=utt_id
+                    )
+                self._utterance_transcripts[utt_id].add_transcript(text)
+
+        elif event.type == CascadedEventType.TTS_AUDIO:
             audio = event.audio
             if audio:
                 # Convert TTS audio from internal format to telephony (8kHz μ-law)
                 telephony_audio = self._audio_converter.convert_output(audio)
                 utterance_id = f"utt_{self._utterance_counter}"
                 agent_audio_chunks.append((telephony_audio, utterance_id))
+                # Track audio bytes for proportional transcript
+                if utterance_id in self._utterance_transcripts:
+                    self._utterance_transcripts[utterance_id].add_audio(
+                        len(telephony_audio)
+                    )
 
         elif event.type == CascadedEventType.SPEECH_STARTED:
             vad_events.append("speech_started")
+            self._check_barge_in(agent_audio_chunks, vad_events)
+
+        elif event.type == CascadedEventType.TRANSCRIPT_PARTIAL:
+            self._check_barge_in(agent_audio_chunks, vad_events)
+
+        elif event.type == CascadedEventType.TRANSCRIPT_FINAL:
+            self._check_barge_in(agent_audio_chunks, vad_events)
 
         elif event.type == CascadedEventType.SPEECH_ENDED:
             vad_events.append("speech_stopped")
 
         elif event.type == CascadedEventType.INTERRUPTED:
             vad_events.append("interrupted")
-            # Clear buffered audio - we don't want to play old audio after interrupt
-            self._buffered_audio_chunks = []
-            # Also clear any audio accumulated for this tick so far
-            agent_audio_chunks.clear()
+            self._clear_agent_audio(agent_audio_chunks)
 
         elif event.type == CascadedEventType.TOOL_CALL:
             tc = event.tool_call
@@ -458,6 +545,75 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             self._utterance_counter += 1
 
     # =========================================================================
+    # Barge-in Detection
+    # =========================================================================
+
+    def _check_barge_in(
+        self,
+        agent_audio_chunks: List[Tuple[bytes, Optional[str]]],
+        vad_events: List[str],
+    ) -> None:
+        """Check if the user is barging in on agent speech.
+
+        In noisy environments, Deepgram may only emit one START_OF_SPEECH
+        for the entire session (background noise prevents END_OF_SPEECH).
+        So we also treat any transcript event during buffered playback as
+        a barge-in signal.
+        """
+        has_agent_audio = (
+            len(agent_audio_chunks) > 0 or len(self._buffered_audio_chunks) > 0
+        )
+        if has_agent_audio:
+            vad_events.append("interrupted")
+            self._clear_agent_audio(agent_audio_chunks)
+            logger.debug("Barge-in: cleared buffered agent audio")
+
+    def _clear_agent_audio(
+        self,
+        agent_audio_chunks: List[Tuple[bytes, Optional[str]]],
+    ) -> None:
+        """Clear all buffered and in-tick agent audio."""
+        self._buffered_audio_chunks = []
+        agent_audio_chunks.clear()
+        self._utterance_transcripts.clear()
+        self._current_utterance_id = None
+
+    # =========================================================================
+    # Proportional Transcript
+    # =========================================================================
+
+    def _get_proportional_transcript(
+        self,
+        chunks: List[Tuple[bytes, Optional[str]]],
+    ) -> str:
+        """Get proportional transcript for the audio played this tick.
+
+        Distributes LLM response text across ticks proportionally to how
+        much TTS audio plays per tick. This ensures the user simulator sees
+        text at roughly the same rate the agent is speaking.
+        """
+        if not chunks:
+            return ""
+
+        # Group audio bytes by utterance_id
+        audio_by_item: dict[str, int] = {}
+        for chunk_data, item_id in chunks:
+            if item_id:
+                audio_by_item[item_id] = audio_by_item.get(item_id, 0) + len(chunk_data)
+
+        # Get proportional transcript for each utterance
+        transcript_parts = []
+        for item_id, audio_bytes in audio_by_item.items():
+            if item_id in self._utterance_transcripts:
+                text = self._utterance_transcripts[item_id].get_transcript_for_audio(
+                    audio_bytes
+                )
+                if text:
+                    transcript_parts.append(text)
+
+        return " ".join(transcript_parts)
+
+    # =========================================================================
     # Tool Handling
     # =========================================================================
 
@@ -466,6 +622,7 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
         call_id: str,
         result: str,
         request_response: bool = True,
+        is_error: bool = False,
     ) -> None:
         """Queue a tool result to be sent in the next tick.
 
@@ -473,6 +630,13 @@ class LiveKitCascadedAdapter(DiscreteTimeAdapter):
             call_id: The tool call ID.
             result: The tool result as a string.
             request_response: If True, request a response after sending.
+            is_error: If True, the tool call failed and result contains error details.
         """
         self._pending_tool_results.append((call_id, result, request_response))
         logger.debug(f"Queued tool result for call_id={call_id}")
+
+    async def _execute_tick(self, user_audio, tick_number, result, tick_start):
+        raise NotImplementedError("LiveKit uses its own run_tick")
+
+    async def _flush_pending_tool_results(self):
+        raise NotImplementedError("LiveKit uses its own run_tick")

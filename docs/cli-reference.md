@@ -53,11 +53,12 @@ tau2 run \
 | `--auto-resume` | Automatically resume from existing save file without prompting |
 | `--auto-review` | Automatically run LLM conversation review after each simulation |
 | `--review-mode` | Review mode when `--auto-review` is on: `full` or `user` (default: `full`) |
+| `--review-model` | LLM model to use for review calls (default: `claude-opus-4-5`) |
 | `--hallucination-retries` | Max retries when user simulator hallucination is detected (full-duplex only, default: `3`). Set to `0` to disable |
 | `--timeout` | Maximum wallclock time in seconds per simulation (no timeout by default) |
 | `--audio-native` | Enable audio native mode (voice full-duplex) |
 | `--audio-taps` | Save WAV files at each pipeline stage for debugging (requires `--audio-native`) |
-| `--retrieval-config` | Retrieval configuration for `banking_knowledge` domain (e.g., `bm25`, `openai_embeddings`, `terminal_use`) |
+| `--retrieval-config` | Retrieval configuration for `banking_knowledge` domain (e.g., `alltools`, `bm25`, `terminal_use`) |
 | `--retrieval-config-kwargs` | JSON arguments for the retrieval config constructor (e.g., `'{"top_k": 10}'`) |
 
 ### Audio Native Options
@@ -217,6 +218,25 @@ tau2 review <path>
 | `--limit` | Limit review to first N simulations |
 | `--task-ids` | Only review simulations for these task IDs |
 | `--log-llm` | Log LLM request/response for each review call |
+| `--review-model` | LLM model to use for review calls (default: `claude-opus-4-5`) |
+
+---
+
+## `tau2 convert-results` — Convert Results Format
+
+Convert simulation results between monolithic JSON and directory-based formats.
+
+```bash
+tau2 convert-results <path> [--to {json,dir}] [--no-backup]
+```
+
+| Option | Description |
+|--------|-------------|
+| `<path>` | Path to a `results.json` file or directory containing one |
+| `--to` | Target format: `json` (monolithic) or `dir` (directory with individual sim files). If omitted, converts to the opposite of the current format |
+| `--no-backup` | Skip creating a backup before conversion |
+
+Text runs default to monolithic JSON; voice runs default to directory-based format. Use this command to convert between them when needed.
 
 ---
 
@@ -290,7 +310,11 @@ Useful for testing domain tools, debugging environment responses, and exploring 
 ## Running Tests
 
 ```bash
-make test
+make test              # Core tests (requires: uv sync --extra dev)
+make test-voice        # Voice + streaming tests (requires: uv sync --extra dev --extra voice)
+make test-knowledge    # Banking knowledge tests (requires: uv sync --extra dev --extra knowledge)
+make test-gym          # Gymnasium tests (requires: uv sync --extra dev --extra gym)
+make test-all          # All tests (requires: uv sync --all-extras)
 ```
 
 ---

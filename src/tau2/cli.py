@@ -1,5 +1,4 @@
 import argparse
-import importlib.metadata
 import json
 
 from tau2.config import (
@@ -9,6 +8,7 @@ from tau2.config import (
     DEFAULT_INTEGRATION_DURATION_SECONDS,
     DEFAULT_INTERRUPTION_CHECK_INTERVAL_SECONDS,
     DEFAULT_LLM_AGENT,
+    DEFAULT_LLM_EVAL_USER_SIMULATOR,
     DEFAULT_LLM_LOG_MODE,
     DEFAULT_LLM_TEMPERATURE_AGENT,
     DEFAULT_LLM_TEMPERATURE_USER,
@@ -44,7 +44,6 @@ from tau2.data_model.simulation import (
 def get_all_variant_names():
     return []
 from tau2.run import get_options, run_domain
-from tau2.scripts.leaderboard.verify_trajectories import VerificationMode
 
 
 def get_all_retrieval_config_names():
@@ -243,18 +242,16 @@ def add_run_args(parser):
     parser.add_argument(
         "--audio-native-provider",
         type=str,
-        choices=["openai", "gemini", "xai"],
+        choices=["openai", "gemini", "xai", "livekit"],
         default=DEFAULT_AUDIO_NATIVE_PROVIDER,
-        help=f"Audio native API provider. 'openai' uses OpenAI Realtime API, "
-        f"'gemini' uses Google Gemini Live API, 'xai' uses xAI Grok Voice Agent API. "
-        f"Default is '{DEFAULT_AUDIO_NATIVE_PROVIDER}'.",
+        help=f"Audio native API provider. Default is '{DEFAULT_AUDIO_NATIVE_PROVIDER}'.",
     )
     parser.add_argument(
         "--cascaded-config",
         type=str,
         default=None,
         help="Cascaded config preset name for livekit provider. "
-        "Available presets: 'default', 'openai-thinking', 'openai-thinking-high'. "
+        "Available presets: 'default', 'openai-thinking'. "
         "See tau2.voice.audio_native.livekit.config for details.",
     )
     parser.add_argument(
@@ -262,6 +259,13 @@ def add_run_args(parser):
         type=str,
         default=None,
         help="Audio native model to use. If not specified, uses the default model for the selected provider.",
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        type=str,
+        choices=["minimal", "low", "medium", "high"],
+        default=None,
+        help="Reasoning effort for thinking models. Only applies to providers that support it (e.g. OpenAI).",
     )
     parser.add_argument(
         "--tick-duration",
@@ -377,10 +381,10 @@ def add_run_args(parser):
         help=(
             "Knowledge retrieval config name (banking_knowledge domain). "
             "Offline: no_knowledge, full_kb, golden_retrieval, bm25, bm25_grep, grep_only. "
-            "Requires OPENAI_API_KEY: openai_embeddings*. "
-            "Requires OPENROUTER_API_KEY: qwen_embeddings*. "
-            "Requires sandbox-runtime: terminal_use*. "
-            "Default: bm25."
+            "Requires OPENAI_API_KEY: openai_embeddings*, alltools. "
+            "Requires OPENROUTER_API_KEY: qwen_embeddings*, alltools-qwen. "
+            "Requires sandbox-runtime: terminal_use*, alltools, alltools-qwen. "
+            "Default for banking_knowledge: alltools (BM25 + dense + shell)."
         ),
     )
     parser.add_argument(
@@ -413,6 +417,12 @@ def add_run_args(parser):
         help="Review mode when --auto-review is enabled: 'full' (agent+user errors, default) or 'user' (user simulator only).",
     )
     parser.add_argument(
+        "--review-model",
+        type=str,
+        default=DEFAULT_LLM_EVAL_USER_SIMULATOR,
+        help=f"LLM model to use for review calls. Default is {DEFAULT_LLM_EVAL_USER_SIMULATOR}.",
+    )
+    parser.add_argument(
         "--hallucination-retries",
         type=int,
         default=3,
@@ -421,11 +431,9 @@ def add_run_args(parser):
 
 
 def _get_version() -> str:
-    """Get the package version from metadata, falling back to pyproject.toml."""
-    try:
-        return importlib.metadata.version("tau2")
-    except importlib.metadata.PackageNotFoundError:
-        return "dev"
+    from tau2.utils.utils import get_tau2_version
+
+    return get_tau2_version()
 
 
 def run_intro():
@@ -604,6 +612,7 @@ def main():
                 provider=args.audio_native_provider,
                 model=audio_native_model,
                 cascaded_config_name=args.cascaded_config,
+                reasoning_effort=args.reasoning_effort,
                 # Timing
                 tick_duration_seconds=args.tick_duration,
                 max_steps_seconds=args.max_steps_seconds,
@@ -649,6 +658,7 @@ def main():
             auto_resume=args.auto_resume,
             auto_review=args.auto_review,
             review_mode=args.review_mode,
+            review_model=args.review_model,
             hallucination_retries=args.hallucination_retries,
             retrieval_config=args.retrieval_config,
             retrieval_config_kwargs=args.retrieval_config_kwargs,
@@ -811,6 +821,12 @@ def main():
         action="store_true",
         help="Log LLM request/response for each review call",
     )
+    review_parser.add_argument(
+        "--review-model",
+        type=str,
+        default=DEFAULT_LLM_EVAL_USER_SIMULATOR,
+        help=f"LLM model to use for review calls. Default is {DEFAULT_LLM_EVAL_USER_SIMULATOR}.",
+    )
     review_parser.set_defaults(func=lambda args: run_review(args))
 
     # Leaderboard command
@@ -886,13 +902,6 @@ def main():
         "submission_dir",
         help="Path to the submission directory to validate",
     )
-    submit_validate_parser.add_argument(
-        "--mode",
-        type=VerificationMode,
-        choices=[mode.value for mode in VerificationMode],
-        default=VerificationMode.PUBLIC,
-        help=f"Verification mode. Default is '{VerificationMode.PUBLIC.value}'",
-    )
     submit_validate_parser.set_defaults(func=lambda args: run_validate_submission(args))
 
     # Submit verify-trajs subcommand
@@ -904,14 +913,31 @@ def main():
         nargs="+",
         help="Paths to trajectory files, directories, or glob patterns",
     )
-    submit_verify_parser.add_argument(
-        "--mode",
-        type=VerificationMode,
-        choices=[mode.value for mode in VerificationMode],
-        default=VerificationMode.PUBLIC,
-        help=f"Verification mode. Default is '{VerificationMode.PUBLIC.value}'",
-    )
     submit_verify_parser.set_defaults(func=lambda args: run_verify_trajectories(args))
+
+    # Convert results format command
+    convert_parser = subparsers.add_parser(
+        "convert-results",
+        help="Convert simulation results between storage formats",
+    )
+    convert_parser.add_argument(
+        "path",
+        help="Path to results.json or results directory to convert",
+    )
+    convert_parser.add_argument(
+        "--to",
+        dest="target_format",
+        choices=["json", "dir"],
+        default=None,
+        help="Target format: 'json' (monolithic) or 'dir' (directory with individual sim files). "
+        "If omitted, converts to the opposite of the current format.",
+    )
+    convert_parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Skip creating a .bak backup of the original file",
+    )
+    convert_parser.set_defaults(func=lambda args: run_convert_results(args))
 
     args = parser.parse_args()
     if not hasattr(args, "func"):
@@ -956,11 +982,14 @@ def run_verify_trajectories(args):
 
     from loguru import logger
 
-    from tau2.scripts.leaderboard.verify_trajectories import verify_trajectories
+    from tau2.scripts.leaderboard.verify_trajectories import (
+        VerificationMode,
+        verify_trajectories,
+    )
 
     logger.configure(handlers=[{"sink": sys.stderr, "level": "ERROR"}])
 
-    verify_trajectories(args.paths, args.mode)
+    verify_trajectories(args.paths, VerificationMode.PUBLIC)
 
 
 def run_evaluate_trajectories(args):
@@ -1025,6 +1054,7 @@ def run_review(args):
             limit=args.limit,
             task_ids=args.task_ids,
             log_llm=args.log_llm,
+            review_model=args.review_model,
         )
 
 
@@ -1044,7 +1074,7 @@ def run_validate_submission(args):
     """Run the validate submission command."""
     from tau2.scripts.leaderboard.prepare_submission import validate_submission
 
-    validate_submission(submission_dir=args.submission_dir, mode=args.mode)
+    validate_submission(submission_dir=args.submission_dir)
 
 
 def run_manual_mode():
@@ -1062,6 +1092,59 @@ def run_leaderboard(args):
         metric=args.metric,
         limit=args.limit,
     )
+
+
+def run_convert_results(args):
+    """Convert simulation results between storage formats."""
+    import shutil
+    from pathlib import Path
+
+    from tau2.data_model.simulation import Results
+
+    path = Path(args.path)
+    current_fmt = Results._detect_format(path)
+    target_fmt = args.target_format
+
+    if target_fmt is None:
+        target_fmt = "json" if current_fmt == "dir" else "dir"
+
+    if current_fmt == target_fmt:
+        print(f"Results at {path} are already in '{target_fmt}' format.")
+        return
+
+    print(f"Converting {path}: '{current_fmt}' -> '{target_fmt}'")
+    results = Results.load(path)
+
+    meta_path = path if path.suffix == ".json" else path / "results.json"
+
+    if not args.no_backup:
+        if current_fmt == "json":
+            backup = meta_path.with_suffix(".json.bak")
+            shutil.copy2(meta_path, backup)
+            print(f"  Backup: {backup}")
+        else:
+            sims_dir = meta_path.parent / "simulations"
+            backup_dir = meta_path.parent / "simulations.bak"
+            if sims_dir.exists():
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir)
+                shutil.copytree(sims_dir, backup_dir)
+            backup = meta_path.with_suffix(".json.bak")
+            shutil.copy2(meta_path, backup)
+            print(f"  Backup: {backup}")
+            if backup_dir.exists():
+                print(f"  Backup: {backup_dir}")
+
+    if target_fmt == "dir":
+        results.save(meta_path, format="dir")
+    else:
+        sims_dir = meta_path.parent / "simulations"
+        results.save(meta_path, format="json")
+        if sims_dir.exists():
+            shutil.rmtree(sims_dir)
+
+    n = len(results.simulations)
+    print(f"  Done. {n} simulation(s) converted to '{target_fmt}' format.")
 
 
 if __name__ == "__main__":

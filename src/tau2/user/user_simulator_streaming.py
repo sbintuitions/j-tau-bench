@@ -17,6 +17,7 @@ from tau2.agent.base.streaming import (
     merge_homogeneous_chunks,
 )
 from tau2.agent.base.voice import VoiceMixin, VoiceState
+from tau2.config import VOICE_USER_SIMULATOR_DECISION_MODEL
 from tau2.data_model.audio import (
     PCM_SAMPLE_RATE,
     AudioData,
@@ -46,14 +47,16 @@ from tau2.user.user_simulator_base import (
 )
 from tau2.utils.llm_utils import generate
 from tau2.utils.utils import get_now
-from tau2.voice.synthesis.audio_effects import (
-    EffectScheduler,
-    OutOfTurnSpeechGenerator,
+from tau2.voice.synthesis.audio_effects.effects import StreamingTelephonyConverter
+from tau2.voice.synthesis.audio_effects.processor import (
     PendingEffectState,
     StreamingAudioEffectsMixin,
+)
+from tau2.voice.synthesis.audio_effects.scheduler import EffectScheduler
+from tau2.voice.synthesis.audio_effects.speech_generator import (
+    OutOfTurnSpeechGenerator,
     create_streaming_audio_generators,
 )
-from tau2.voice.synthesis.audio_effects.effects import StreamingTelephonyConverter
 from tau2.voice.utils.audio_tap import AudioTap
 from tau2.voice_config import (
     BACKCHANNEL_PHRASES,
@@ -286,10 +289,9 @@ def user_interruption_policy(
     # Create messages for LLM call
     decision_messages = [UserMessage(role="user", content=interruption_prompt)]
 
-    # Call LLM to make decision using gpt-4.1
     try:
         response = generate(
-            model="gpt-4.1",
+            model=VOICE_USER_SIMULATOR_DECISION_MODEL,
             messages=decision_messages,
             call_name="interruption_decision",
         )
@@ -355,10 +357,9 @@ def user_backchannel_policy(
     # Create messages for LLM call
     decision_messages = [UserMessage(role="user", content=decision_prompt)]
 
-    # Call LLM to make decision using gpt-4.1
     try:
         response = generate(
-            model="gpt-4.1",
+            model=VOICE_USER_SIMULATOR_DECISION_MODEL,
             messages=decision_messages,
             call_name="backchannel_decision",
         )

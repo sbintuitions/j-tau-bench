@@ -74,7 +74,6 @@ from tau2.domains.telecom_ja.environment import (
 from tau2.environment.environment import Environment
 from tau2.user.user_simulator import DummyUser, UserSimulator
 from tau2.user.user_simulator_base import FullDuplexUser, HalfDuplexUser
-# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
 
 
 class RegistryInfo(BaseModel):
@@ -301,10 +300,16 @@ try:
     # User implementations
     registry.register_user(UserSimulator, "user_simulator")
     registry.register_user(DummyUser, "dummy_user")
-    # NOTE: Commented out to run without voice extras
-    # registry.register_user(
-    #     VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
-    # )
+    try:
+        from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
+
+        registry.register_user(
+            VoiceStreamingUserSimulator, "voice_streaming_user_simulator"
+        )
+    except ImportError:
+        logger.debug(
+            "Voice dependencies not installed, skipping voice user registration"
+        )
 
     # Agent factories
     registry.register_agent_factory(create_llm_agent, "llm_agent")

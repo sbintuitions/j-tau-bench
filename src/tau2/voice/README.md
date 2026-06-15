@@ -77,8 +77,11 @@ With `--verbose-logs`, voice runs produce:
 
 ```
 data/simulations/<run_name>/
-├── results.json                        # Simulation results and metrics
-└── tasks/
+├── results.json                        # Metadata and task definitions
+├── simulations/                        # Individual simulation data files
+│   ├── sim_0.json
+│   └── ...
+└── artifacts/
     └── task_<id>/
         └── sim_<uuid>/
             ├── sim_status.json         # Simulation status
@@ -92,6 +95,8 @@ data/simulations/<run_name>/
                 └── *.json              # LLM call logs
 ```
 
+Voice runs use a directory-based storage format: `results.json` holds metadata and task definitions, while each simulation is stored as a separate file under `simulations/`. Runtime artifacts (audio, logs) live under `artifacts/`.
+
 ## Architecture
 
 The voice module has two main components:
@@ -104,6 +109,23 @@ The voice module has two main components:
 
 - **`utils/`** — Audio format conversion, WAV I/O, and shared helpers.
 
+## Voice Persona Setup
+
+The user simulator uses ElevenLabs voices defined in `src/tau2/data_model/voice_personas.py`. The default voice IDs are Sierra-internal and **will not work** for external users.
+
+To run voice evaluations, create your own voices in ElevenLabs and configure them via environment variables:
+
+```bash
+# In your .env file:
+TAU2_VOICE_ID_MATT_DELANEY=your_voice_id_here
+TAU2_VOICE_ID_LISA_BRENNER=your_voice_id_here
+# ... (one per persona)
+```
+
+For a minimal setup, create just the two control personas and use `--speech-complexity control`.
+
+See the [Voice Persona Setup Guide](../../docs/voice-personas.md) for step-by-step instructions on creating matching voices with ElevenLabs Voice Design.
+
 ## Environment Variables
 
 | Variable | Used by |
@@ -113,3 +135,4 @@ The voice module has two main components:
 | `XAI_API_KEY` | xAI Grok Voice provider |
 | `ELEVENLABS_API_KEY` | User simulator TTS (synthesis) |
 | `DEEPGRAM_API_KEY` | Transcription (Deepgram nova-2, nova-3) |
+| `TAU2_VOICE_ID_*` | Custom voice ID overrides (see [Voice Persona Setup](../../docs/voice-personas.md)) |

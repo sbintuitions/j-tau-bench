@@ -1,9 +1,15 @@
-"""Pydantic models for tau-bench leaderboard submissions."""
+"""Pydantic models for tau-bench leaderboard submissions.
+
+Single source of truth for all submission-related data models.
+The JSON schema at web/leaderboard/public/submissions/schema.json
+is auto-generated from these models.
+"""
 
 from datetime import date
+from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tau2.data_model.simulation import Results as TrajectoryResults
 from tau2.utils.pydantic_utils import BaseModelNoExtra
@@ -44,6 +50,12 @@ class DomainResults(BaseModelNoExtra):
         description="Retrieval method used for knowledge base access (banking_knowledge domain only)",
     )
 
+    def get_pass_k(self, k: int) -> Optional[float]:
+        """Get pass^k score for a given k."""
+        if k < 1 or k > 4:
+            raise ValueError(f"k must be between 1 and 4, got {k}")
+        return getattr(self, f"pass_{k}")
+
 
 class Results(BaseModelNoExtra):
     """Performance results for each domain."""
@@ -53,18 +65,51 @@ class Results(BaseModelNoExtra):
     telecom: Optional[DomainResults] = None
     banking_knowledge: Optional[DomainResults] = None
 
-    def get_domain_results(self, domain: str) -> DomainResults:
-        """Get the domain results for a given domain."""
-        if domain == "retail":
+    @model_validator(mode="after")
+    def _validate_banking_knowledge_retrieval_config(self) -> "Results":
+        if (
+            self.banking_knowledge is not None
+            and self.banking_knowledge.retrieval_config is None
+        ):
+            raise ValueError(
+                "banking_knowledge results require retrieval_config "
+                "(e.g. 'bm25', 'terminal', 'text-emb-3-large')"
+            )
+        return self
+
+    def get_domain(self, domain: str) -> Optional[DomainResults]:
+        """Get results for a specific domain."""
+        domain_lower = domain.lower()
+        if domain_lower == "retail":
             return self.retail
-        elif domain == "airline":
+        elif domain_lower == "airline":
             return self.airline
-        elif domain == "telecom":
+        elif domain_lower == "telecom":
             return self.telecom
-        elif domain == "banking_knowledge":
+        elif domain_lower == "banking_knowledge":
             return self.banking_knowledge
         else:
-            raise ValueError(f"Invalid domain: {domain}")
+            raise ValueError(
+                f"Invalid domain: {domain}. "
+                f"Must be retail, airline, telecom, or banking_knowledge."
+            )
+
+    # Backward-compat alias
+    get_domain_results = get_domain
+
+    @property
+    def available_domains(self) -> list[str]:
+        """Get list of domains that have results."""
+        domains = []
+        if self.retail is not None:
+            domains.append("retail")
+        if self.airline is not None:
+            domains.append("airline")
+        if self.telecom is not None:
+            domains.append("telecom")
+        if self.banking_knowledge is not None:
+            domains.append("banking_knowledge")
+        return domains
 
 
 class Reference(BaseModelNoExtra):
@@ -76,6 +121,40 @@ class Reference(BaseModelNoExtra):
         None,
         description="Type of reference: paper, blog_post, documentation, model_card, github, huggingface, other",
     )
+
+
+class ModelRelease(BaseModelNoExtra):
+    """Information about when and where the model was publicly released.
+
+    This metadata is about the model itself (independent of when it was
+    evaluated on tau2-bench), and is used to track model progress over time
+    on the leaderboard.
+    """
+
+    release_date: Optional[date] = Field(
+        None,
+        description="Public release date of the model (YYYY-MM-DD). "
+        "Use the date the model was first made publicly available, not the "
+        "evaluation date.",
+    )
+    announcement_url: Optional[str] = Field(
+        None,
+        description="URL to the model's release announcement (blog post, "
+        "paper, model card, release notes, etc.).",
+    )
+    announcement_title: Optional[str] = Field(
+        None,
+        description="Title of the release announcement (used as link text in the UI).",
+    )
+
+    @model_validator(mode="after")
+    def _validate_url_has_date(self) -> "ModelRelease":
+        if self.announcement_url is not None and self.release_date is None:
+            raise ValueError(
+                "model_release.announcement_url is set but model_release.release_date "
+                "is not. Provide a release date when linking to a release announcement."
+            )
+        return self
 
 
 class Verification(BaseModelNoExtra):
@@ -105,13 +184,26 @@ class Methodology(BaseModelNoExtra):
     )
     user_simulator: Optional[str] = Field(
         None,
-        description="Model used for user simulation during evaluation, or null if unknown",
+        description="For text: model name (e.g. 'gpt-4.1-2025-04-14'). "
+        "For voice: version identifier (e.g. 'v1.0') anchored to git tag voice-user-sim-<version>.",
     )
     notes: Optional[str] = Field(
         None, description="Additional notes about the evaluation methodology"
     )
     verification: Optional[Verification] = Field(
         None, description="Verification details for result authenticity"
+    )
+
+
+class VoicePipeline(BaseModelNoExtra):
+    """Component model identifiers for a cascaded voice submission."""
+
+    asr: Optional[str] = Field(
+        None, description="ASR / speech-to-text model identifier"
+    )
+    llm: Optional[str] = Field(None, description="LLM model identifier")
+    tts: Optional[str] = Field(
+        None, description="TTS / speech synthesis model identifier"
     )
 
 
@@ -138,12 +230,15 @@ class VoiceConfig(BaseModelNoExtra):
         None,
         description="User simulator TTS provider and model (e.g. 'elevenlabs/eleven_v3')",
     )
+    pipeline: Optional[VoicePipeline] = Field(
+        None,
+        description="Component models used by a cascaded voice pipeline",
+    )
 
 
 class Submission(BaseModelNoExtra):
     """Tau2-Bench Leaderboard Submission model."""
 
-    # Allow extra fields to be tolerant of older/third-party submissions
     model_config = ConfigDict(
         extra="ignore",
         json_schema_extra={
@@ -154,6 +249,11 @@ class Submission(BaseModelNoExtra):
                     "submitting_organization": "OpenAI",
                     "submission_date": "2024-01-15",
                     "submission_type": "standard",
+                    "model_release": {
+                        "release_date": "2024-01-10",
+                        "announcement_url": "https://openai.com/index/gpt-4-1/",
+                        "announcement_title": "Introducing GPT-4.1",
+                    },
                     "contact_info": {
                         "email": "researcher@openai.com",
                         "name": "Jane Doe",
@@ -212,9 +312,10 @@ class Submission(BaseModelNoExtra):
         description="Organization that actually ran the evaluation and submitted the results",
     )
     submission_date: date = Field(..., description="Date of submission")
-    submission_type: str = Field(
+    submission_type: Literal["standard", "custom"] = Field(
         "standard",
-        description="Type of submission: 'standard' or 'custom'",
+        description="Type of submission: 'standard' uses the default tau2-bench scaffold, "
+        "'custom' uses modified scaffolds (multi-model routers, additional tools, custom prompting, etc.)",
     )
     modality: Literal["text", "voice"] = Field(
         "text",
@@ -245,14 +346,88 @@ class Submission(BaseModelNoExtra):
         None,
         description="Voice-specific configuration for audio-native evaluations (only for voice submissions)",
     )
+    model_release: Optional[ModelRelease] = Field(
+        None,
+        description="Public release metadata for the model itself (release date "
+        "and announcement link). Distinct from `submission_date`, which is when "
+        "the evaluation was submitted. Used to track model progress over time.",
+    )
+    reasoning_effort: Optional[str] = Field(
+        None,
+        description="Reasoning/thinking effort level used during evaluation "
+        "(e.g. 'high', 'low', 'none', 'enabled')",
+    )
+
+    _submission_id: Optional[str] = None
+
+    @property
+    def submission_id(self) -> Optional[str]:
+        """Get the submission ID (folder name)."""
+        return self._submission_id
+
+    def set_submission_id(self, submission_id: str) -> None:
+        """Set the submission ID."""
+        self._submission_id = submission_id
+
+    @classmethod
+    def load(cls, path: Path | str) -> "Submission":
+        """Load a submission from a JSON file."""
+        path = Path(path)
+        with open(path, "r") as f:
+            submission = cls.model_validate_json(f.read())
+        submission.set_submission_id(path.parent.name)
+        return submission
+
+    def get_pass_1_average(self) -> Optional[float]:
+        """Get the average pass^1 score across all available domains."""
+        scores = []
+        for domain in self.results.available_domains:
+            domain_results = self.results.get_domain(domain)
+            if domain_results and domain_results.pass_1 is not None:
+                scores.append(domain_results.pass_1)
+        if not scores:
+            return None
+        return sum(scores) / len(scores)
 
 
+# Constants
 SUBMISSION_FILE_NAME = "submission.json"
 TRAJECTORY_FILES_DIR_NAME = "trajectories"
+MANIFEST_FILE_NAME = "manifest.json"
+DOMAINS = ["retail", "airline", "telecom", "banking_knowledge"]
+METRICS = ["pass_1", "pass_2", "pass_3", "pass_4", "cost"]
+
+
+class LeaderboardManifest(BaseModelNoExtra):
+    """Manifest file listing all submissions."""
+
+    submissions: list[str] = Field(
+        default_factory=list, description="List of text submission folder names"
+    )
+    voice_submissions: list[str] = Field(
+        default_factory=list, description="List of voice submission folder names"
+    )
+    legacy_submissions: list[str] = Field(
+        default_factory=list,
+        description="List of legacy submission folder names (previous benchmark versions)",
+    )
+    last_updated: Optional[str] = Field(
+        None, description="ISO timestamp of last update"
+    )
+
+
+class LeaderboardEntry(BaseModel):
+    """A leaderboard entry with computed ranking information."""
+
+    submission: Submission
+    rank: Optional[int] = None
+    score: Optional[float] = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class SubmissionData(BaseModelNoExtra):
-    """Submission data."""
+    """Submission data with associated trajectory results."""
 
     submission_dir: str
     submission_file: str

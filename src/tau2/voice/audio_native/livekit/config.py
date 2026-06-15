@@ -31,6 +31,9 @@ class DeepgramSTTConfig(BaseModel):
         vad_events: Whether to emit VAD events (speech start/end).
         endpointing_ms: Silence duration (ms) before considering speech ended.
             Lower values = faster response, higher values = fewer false endpoints.
+        utterance_end_ms: Fallback turn-end detection (ms). If a FINAL_TRANSCRIPT
+            arrives but no END_OF_SPEECH follows (common with background noise),
+            trigger the LLM after this duration of no new transcript activity.
         smart_format: Apply formatting (numbers, dates, etc.).
         punctuate: Add punctuation to transcripts.
     """
@@ -40,7 +43,8 @@ class DeepgramSTTConfig(BaseModel):
     language: str = "en-US"
     interim_results: bool = True
     vad_events: bool = True
-    endpointing_ms: int = 25
+    endpointing_ms: int = 350
+    utterance_end_ms: int = 2000
     smart_format: bool = False
     punctuate: bool = True
 
@@ -66,7 +70,7 @@ class OpenAILLMConfig(BaseModel):
         model: Model name (e.g., "gpt-4.1", "o3-mini", "gpt-4.1-mini").
         temperature: Sampling temperature (0.0-2.0). Not used for thinking models.
         top_p: Nucleus sampling parameter.
-        reasoning_effort: For thinking models (o1, o3): "low", "medium", "high".
+        reasoning_effort: For thinking models (o1, o3): "minimal", "low", "medium", "high".
             Controls how much "thinking" the model does before responding.
         max_completion_tokens: Maximum tokens in the response.
         timeout_seconds: Request timeout in seconds.
@@ -77,7 +81,7 @@ class OpenAILLMConfig(BaseModel):
     model: str = "gpt-4.1"
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = None
+    reasoning_effort: Optional[Literal["minimal", "low", "medium", "high"]] = None
     max_completion_tokens: Optional[int] = None
     timeout_seconds: Optional[float] = None
     parallel_tool_calls: Optional[bool] = None
@@ -174,6 +178,8 @@ class CascadedConfig(BaseModel):
     stt: STTConfig = Field(default_factory=DeepgramSTTConfig)
     llm: LLMConfig = Field(default_factory=OpenAILLMConfig)
     tts: TTSConfig = Field(default_factory=DeepgramTTSConfig)
+    preamble: bool = False
+    preamble_text: str = "One moment please."
     log_prompts: bool = False
 
 
@@ -188,16 +194,11 @@ CASCADED_CONFIGS: Dict[str, CascadedConfig] = {
         llm=OpenAILLMConfig(model="gpt-4.1"),
         tts=DeepgramTTSConfig(model="aura-asteria-en"),
     ),
-    # OpenAI thinking: Uses OpenAI's thinking models for complex reasoning
+    # OpenAI thinking: Uses OpenAI's thinking models with high reasoning effort
     "openai-thinking": CascadedConfig(
-        stt=DeepgramSTTConfig(model="nova-3"),
-        llm=OpenAILLMConfig(model="gpt-5.2", reasoning_effort="medium"),
-        tts=DeepgramTTSConfig(model="aura-asteria-en"),
-    ),
-    # OpenAI thinking (high): Maximum reasoning effort
-    "openai-thinking-high": CascadedConfig(
         stt=DeepgramSTTConfig(model="nova-3"),
         llm=OpenAILLMConfig(model="gpt-5.2", reasoning_effort="high"),
         tts=DeepgramTTSConfig(model="aura-asteria-en"),
+        # preamble=True,
     ),
 }
