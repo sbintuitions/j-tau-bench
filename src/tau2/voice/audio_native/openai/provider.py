@@ -31,7 +31,7 @@ from tau2.voice.audio_native.openai.events import (
     UnknownEvent,
     parse_realtime_event,
 )
-from tau2.voice.utils.openai_utils import audio_format_to_openai_string
+from tau2.voice.utils.openai_utils import audio_format_to_openai
 
 load_dotenv()
 
@@ -104,7 +104,6 @@ class OpenAIRealtimeProvider:
             vad_config=OpenAIVADConfig(),
             modality="text"
         )
-        await provider.send_text("Hello!")
         async for event in provider.receive_events():
             print(event)
         await provider.disconnect()
@@ -114,13 +113,20 @@ class OpenAIRealtimeProvider:
     BASE_URL = DEFAULT_OPENAI_REALTIME_BASE_URL
     DEFAULT_MODEL = DEFAULT_OPENAI_REALTIME_MODEL
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
+    ):
         """Initialize the OpenAI Realtime provider.
 
         Args:
             api_key: OpenAI API key. If not provided, reads from OPENAI_API_KEY
                 environment variable.
             model: Model identifier to use. Defaults to DEFAULT_MODEL.
+            reasoning_effort: Reasoning effort for thinking models ("minimal",
+                "low", "medium", "high"). If None, not sent to the API.
 
         Raises:
             ValueError: If no API key is provided or found in environment.
@@ -130,6 +136,7 @@ class OpenAIRealtimeProvider:
             raise ValueError("OpenAI API key not provided. Set OPENAI_API_KEY env var.")
 
         self.model = model or self.DEFAULT_MODEL
+        self.reasoning_effort = reasoning_effort
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self._current_vad_config: Optional[OpenAIVADConfig] = None
         self._audio_format: AudioFormat = TELEPHONY_AUDIO_FORMAT
@@ -171,10 +178,7 @@ class OpenAIRealtimeProvider:
             return
 
         url = f"{self.BASE_URL}?model={self.model}"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "OpenAI-Beta": "realtime=v1",
-        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
 
         self.ws = await websockets.connect(url, additional_headers=headers)
 
@@ -298,7 +302,7 @@ class OpenAIRealtimeProvider:
         if modality == "text":
             modalities = ["text"]
         elif modality == "audio":
-            modalities = ["text", "audio"]
+            modalities = ["audio"]
         elif modality == "audio_in_text_out":
             modalities = ["text"]
         else:
@@ -311,43 +315,39 @@ class OpenAIRealtimeProvider:
         # Store audio format for reference
         self._audio_format = audio_format
 
-        session_config = {
-            "type": "session.update",
-            "session": {
-                "instructions": system_prompt,
-                "modalities": modalities,
-                "tools": self._format_tools_for_api(tools),
-                "tool_choice": "auto",
-                "turn_detection": self._build_turn_detection_config(vad_config),
-            },
+        audio_fmt = audio_format_to_openai(audio_format)
+
+        session = {
+            "type": "realtime",
+            "instructions": system_prompt,
+            "output_modalities": modalities,
+            "tools": self._format_tools_for_api(tools),
+            "tool_choice": "auto",
         }
 
+        if self.reasoning_effort is not None:
+            session["reasoning"] = {"effort": self.reasoning_effort}
+
         if modality in ("audio", "audio_in_text_out"):
-            # Get OpenAI format string from AudioFormat
-            openai_format = audio_format_to_openai_string(audio_format)
-            input_config = {
-                "input_audio_format": openai_format,
-                "input_audio_transcription": {
-                    "model": DEFAULT_OPENAI_TRANSCRIPTION_MODEL,
-                    "language": "en",
-                },
-                "input_audio_noise_reduction": {
-                    "type": DEFAULT_OPENAI_NOISE_REDUCTION,
+            session["audio"] = {
+                "input": {
+                    "format": audio_fmt,
+                    "transcription": {
+                        "model": DEFAULT_OPENAI_TRANSCRIPTION_MODEL,
+                        "language": "en",
+                    },
+                    "noise_reduction": {"type": DEFAULT_OPENAI_NOISE_REDUCTION},
+                    "turn_detection": self._build_turn_detection_config(vad_config),
                 },
             }
-            session_config["session"].update(input_config)
 
         if modality == "audio":
-            # Get OpenAI format string from AudioFormat
-            openai_format = audio_format_to_openai_string(audio_format)
-            session_config["session"].update(
-                {
-                    "voice": DEFAULT_OPENAI_VOICE,
-                    "output_audio_format": openai_format,
-                }
-            )
+            session.setdefault("audio", {})["output"] = {
+                "format": audio_fmt,
+                "voice": DEFAULT_OPENAI_VOICE,
+            }
 
-        await self.ws.send(json.dumps(session_config))
+        await self.ws.send(json.dumps({"type": "session.update", "session": session}))
 
         while True:
             response = await self.ws.recv()
@@ -361,108 +361,12 @@ class OpenAIRealtimeProvider:
                 error_msg = data.get("error", {}).get("message", "Unknown error")
                 raise RuntimeError(f"Session configuration failed: {error_msg}")
 
-    async def set_vad_mode(self, vad_config: OpenAIVADConfig) -> None:
-        """Update the Voice Activity Detection mode for the session.
-
-        Sends a session update to change VAD settings. This is a fire-and-forget
-        operation that does not wait for confirmation from the API.
-
-        Args:
-            vad_config: The new VAD configuration to apply.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        session_update = {
-            "type": "session.update",
-            "session": {
-                "turn_detection": self._build_turn_detection_config(vad_config),
-            },
-        }
-
-        await self.ws.send(json.dumps(session_update))
-        self._current_vad_config = vad_config
-        logger.debug(f"VAD mode update sent: {vad_config.mode}")
-
-    async def send_text(self, text: str, commit: bool = True) -> None:
-        """Send a text message from the user to the conversation.
-
-        Creates a user message in the conversation and optionally triggers
-        a response from the assistant.
-
-        Args:
-            text: The text content of the user's message.
-            commit: If True, immediately request a response from the assistant.
-                If False, the message is added but no response is triggered.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        item_create = {
-            "type": "conversation.item.create",
-            "item": {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": text}],
-            },
-        }
-        await self.ws.send(json.dumps(item_create))
-
-        if commit:
-            await self.ws.send(json.dumps({"type": "response.create"}))
-
-    async def add_assistant_message(self, text: str) -> None:
-        """Add an assistant message to the conversation history.
-
-        Injects a message as if it came from the assistant, useful for
-        seeding conversation context or simulating prior exchanges.
-        Does not trigger a new response.
-
-        Args:
-            text: The text content of the assistant's message.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        item_create = {
-            "type": "conversation.item.create",
-            "item": {
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "text", "text": text}],
-            },
-        }
-        await self.ws.send(json.dumps(item_create))
-
-    async def add_user_message(self, text: str) -> None:
-        """Add a user message to the conversation without triggering a response.
-
-        Convenience method that calls send_text with commit=False.
-        Useful for building up conversation context.
-
-        Args:
-            text: The text content of the user's message.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        await self.send_text(text, commit=False)
-
     async def send_audio(self, audio_data: bytes) -> None:
         """Append audio data to the input audio buffer.
 
         Sends raw audio bytes to the API's input buffer. The audio is
-        base64-encoded before transmission. Audio accumulates in the buffer
-        until commit_audio() is called.
+        base64-encoded before transmission. With server VAD, the API commits
+        turns automatically from buffered audio.
 
         Args:
             audio_data: Raw audio bytes in the configured input format (g711_ulaw).
@@ -477,53 +381,10 @@ class OpenAIRealtimeProvider:
         message = {"type": "input_audio_buffer.append", "audio": audio_b64}
         await self.ws.send(json.dumps(message))
 
-    async def commit_audio(self) -> None:
-        """Commit the audio buffer and request a response.
-
-        Finalizes the accumulated audio in the input buffer and triggers
-        the assistant to process it and generate a response.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        await self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-        await self.ws.send(json.dumps({"type": "response.create"}))
-
-    async def clear_audio_buffer(self) -> None:
-        """Clear the input audio buffer without processing.
-
-        Discards any accumulated audio data in the input buffer.
-        Useful for canceling or resetting audio input.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        await self.ws.send(json.dumps({"type": "input_audio_buffer.clear"}))
-
     async def send_tool_result(
         self, call_id: str, result: str, request_response: bool = True
     ) -> None:
-        """Send the result of a tool/function call back to the API.
-
-        After the assistant requests a function call, this method is used to
-        provide the result of that function execution.
-
-        Args:
-            call_id: The unique identifier of the function call being responded to.
-                This must match the call_id from the original function call event.
-            result: The string result of the function execution.
-            request_response: If True, immediately request the assistant to
-                continue generating a response. If False, just submit the result.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
+        """Send a tool result and optionally request a continuation response."""
         if not self.is_connected:
             raise RuntimeError("Not connected to API")
 
@@ -540,58 +401,13 @@ class OpenAIRealtimeProvider:
         if request_response:
             await self.ws.send(json.dumps({"type": "response.create"}))
 
-    async def cancel_response(self) -> None:
-        """Cancel an in-progress model response.
-
-        Use this in push-to-talk scenarios (when VAD is disabled) to manually
-        cancel the model's response when the user wants to interrupt. In VAD
-        mode, the server automatically cancels responses when user speech is
-        detected, so this is typically not needed.
-
-        After canceling, you should also send a truncate_item() to inform the
-        server how much audio was actually played.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-        """
-        if not self.is_connected:
-            raise RuntimeError("Not connected to API")
-
-        await self.ws.send(json.dumps({"type": "response.cancel"}))
-        logger.debug("Response cancel sent")
-
     async def truncate_item(
         self,
         item_id: str,
         content_index: int,
         audio_end_ms: int,
     ) -> None:
-        """Truncate an assistant response item to remove unplayed audio.
-
-        When the user interrupts the assistant (barge-in), this method should be
-        called to inform the server how much of the response was actually played.
-        The server will truncate the audio at the specified point and remove the
-        corresponding portion of the transcript from the conversation history.
-
-        This ensures the model's memory of the conversation matches what the user
-        actually heard, enabling natural follow-ups like "what was that last thing?".
-
-        Args:
-            item_id: The item ID of the assistant's response being truncated.
-                This is the item that was interrupted.
-            content_index: Index of the content part being truncated (usually 0
-                for single-part responses).
-            audio_end_ms: Milliseconds of audio that was actually played before
-                the interruption. Audio after this point will be removed from
-                the conversation.
-
-        Raises:
-            RuntimeError: If not connected to the API.
-
-        Note:
-            The server will respond with a conversation.item.truncated event
-            to confirm the truncation.
-        """
+        """Tell the server how much audio was played before interruption."""
         if not self.is_connected:
             raise RuntimeError("Not connected to API")
 
@@ -608,22 +424,10 @@ class OpenAIRealtimeProvider:
         )
 
     async def receive_events(self) -> AsyncGenerator[BaseRealtimeEvent, None]:
-        """Receive and yield events from the WebSocket connection.
+        """Async generator yielding parsed events from the WebSocket.
 
-        An async generator that continuously listens for events from the API
-        and yields them as typed event objects. Handles connection timeouts
-        gracefully by yielding TimeoutEvent, allowing the caller to perform
-        other operations.
-
-        Yields:
-            BaseRealtimeEvent: Parsed event objects, which may be:
-                - Typed events (e.g., ResponseTextDeltaEvent, FunctionCallEvent)
-                - TimeoutEvent: When no message received within 0.1 seconds
-                - UnknownEvent: For unrecognized or error events
-
-        Raises:
-            RuntimeError: If not connected to the API when called, or if the
-                WebSocket connection closes unexpectedly during operation.
+        Yields TimeoutEvent when no message arrives within 10ms.
+        Raises RuntimeError if the connection closes unexpectedly.
         """
         if not self.is_connected:
             raise RuntimeError("Not connected to API")
@@ -660,3 +464,28 @@ class OpenAIRealtimeProvider:
                     f"OpenAI Realtime API: Error receiving event: {type(e).__name__}: {e}"
                 )
                 yield UnknownEvent(type="error", raw={"error": str(e)})
+
+    async def receive_events_for_duration(
+        self, duration_seconds: float
+    ) -> List[BaseRealtimeEvent]:
+        """Receive events for a specified duration.
+
+        Collects all non-timeout events within the time window.
+
+        Args:
+            duration_seconds: How long to collect events.
+
+        Returns:
+            List of events received during the duration.
+        """
+        events = []
+        end_time = asyncio.get_event_loop().time() + duration_seconds
+
+        async for event in self.receive_events():
+            if not isinstance(event, TimeoutEvent):
+                events.append(event)
+
+            if asyncio.get_event_loop().time() >= end_time:
+                break
+
+        return events

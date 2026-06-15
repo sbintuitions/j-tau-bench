@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import TrajectoryVisualizer from './components/TrajectoryVisualizer'
 import Leaderboard from './components/Leaderboard'
+import LeaderboardPreview from './components/LeaderboardPreview'
 
 function App() {
   
@@ -9,6 +10,10 @@ function App() {
   const getViewFromHash = (hash) => {
     const base = hash.split('?')[0]
     if (base === 'leaderboard') return 'leaderboard'
+    // #progress is a deep-link to the Progress-over-time panel inside the
+    // leaderboard view. The view is the leaderboard; the in-page scroll to
+    // #progress is handled by the effect below.
+    if (base === 'progress') return 'leaderboard'
     if (base === 'trajectory-visualizer') return 'trajectory-visualizer'
     if (base === 'results' || base === 'docs') return '__deprecated__'
     return 'home'
@@ -27,6 +32,8 @@ function App() {
   const [currentView, setCurrentView] = useState(getInitialView())
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [blogDropdownOpen, setBlogDropdownOpen] = useState(false)
+  const [papersDropdownOpen, setPapersDropdownOpen] = useState(false)
+  const [heroBlogDropdownOpen, setHeroBlogDropdownOpen] = useState(false)
 
   // Handle navigation with URL updates
   const navigateTo = (view) => {
@@ -37,7 +44,11 @@ function App() {
     } else if (view === 'leaderboard') {
       window.history.pushState(null, '', '#leaderboard')
     } else if (view === 'trajectory-visualizer') {
-      window.history.pushState(null, '', '#trajectory-visualizer')
+      // Preserve existing query params if already on the visualizer
+      const currentHash = window.location.hash || ''
+      if (!currentHash.startsWith('#trajectory-visualizer')) {
+        window.history.pushState(null, '', '#trajectory-visualizer')
+      }
     }
   }
 
@@ -47,6 +58,24 @@ function App() {
   }
 
 
+
+  // Scroll to a specific section if the hash refers to one (e.g. #progress).
+  // Tries a few times with rAF + small timeouts so it works even if the
+  // target hasn't mounted yet (data-loading async views).
+  const scrollToSectionForHash = (hash) => {
+    const base = hash.split('?')[0]
+    const sectionId = base === 'progress' ? 'progress' : null
+    if (!sectionId) return
+    const tryScroll = (attemptsLeft) => {
+      const el = document.getElementById(sectionId)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => tryScroll(attemptsLeft - 1), 100)
+      }
+    }
+    requestAnimationFrame(() => tryScroll(20))
+  }
 
   // Listen for browser back/forward button clicks and handle mobile menu
   useEffect(() => {
@@ -58,6 +87,7 @@ function App() {
         setCurrentView('home')
       } else {
         setCurrentView(view)
+        scrollToSectionForHash(hash)
       }
     }
 
@@ -80,6 +110,9 @@ function App() {
     // Set initial URL if none exists
     if (!window.location.hash) {
       window.history.replaceState(null, '', '#home')
+    } else {
+      // Honor an initial deep-link like #progress on first paint.
+      scrollToSectionForHash(window.location.hash.slice(1))
     }
 
     return () => {
@@ -153,39 +186,53 @@ function App() {
                     <span className="bench-text">-bench</span>
                   </h1>
                 </div>
-                
-                <div className="hero-image-section">
-                  <img src={`${import.meta.env.BASE_URL}traj.png`} alt="Sample τ-bench Trajectories" className="trajectory-image" />
-                </div>
-                
-                <div className="hero-description-section">
-                  <p className="hero-description">
-                    Benchmarking AI agents in collaborative real-world scenarios. 
-                    τ-bench challenges agents to coordinate, guide, and assist users 
-                    in achieving shared objectives across complex enterprise domains.
-                  </p>
-                  <div className="hero-actions">
-                    <div className="button-row">
-                      <a href="https://github.com/sierra-research/tau2-bench" target="_blank" rel="noopener noreferrer">
-                        <button className="btn-primary">View on GitHub</button>
-                      </a>
-                      <button onClick={() => navigateTo('leaderboard')} className="btn-secondary">
-                        View Leaderboard
+
+                <p className="hero-description">
+                  Benchmarking AI agents in collaborative real-world scenarios. 
+                  τ-bench challenges agents to coordinate, guide, and assist users 
+                  in achieving shared objectives across complex enterprise domains.
+                </p>
+
+                <div className="hero-actions">
+                  <div className="button-row">
+                    <a href="https://github.com/sierra-research/tau2-bench" target="_blank" rel="noopener noreferrer">
+                      <button className="btn-primary">View on GitHub</button>
+                    </a>
+                    <a href="https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md" target="_blank" rel="noopener noreferrer">
+                      <button className="btn-secondary">Submit Results</button>
+                    </a>
+                  </div>
+                  <div className="button-row">
+                    <div className="hero-dropdown" onMouseEnter={() => setPapersDropdownOpen(true)} onMouseLeave={() => setPapersDropdownOpen(false)}>
+                      <button className="btn-secondary">
+                        Read Papers <span className="dropdown-arrow">▾</span>
                       </button>
-                      <a href="https://github.com/sierra-research/tau2-bench?tab=readme-ov-file#leaderboard-submission" target="_blank" rel="noopener noreferrer">
-                        <button className="btn-secondary">Submit Results</button>
-                      </a>
+                      <div className={`hero-dropdown-menu ${papersDropdownOpen ? 'open' : ''}`}>
+                        <div className="hero-submenu-item">
+                          <span className="hero-submenu-label">τ³-bench <span className="submenu-arrow">›</span></span>
+                          <div className="hero-submenu">
+                            <a href="https://arxiv.org/abs/2603.04370" target="_blank" rel="noopener noreferrer">τ-Knowledge</a>
+                            <a href="https://arxiv.org/abs/2603.13686" target="_blank" rel="noopener noreferrer">τ-Voice</a>
+                          </div>
+                        </div>
+                        <a href="https://arxiv.org/abs/2506.07982" target="_blank" rel="noopener noreferrer">τ²-bench</a>
+                        <a href="https://arxiv.org/abs/2406.12045" target="_blank" rel="noopener noreferrer">τ-bench</a>
+                      </div>
                     </div>
-                    <div className="button-row">
-                      <a href="https://arxiv.org/abs/2506.07982" target="_blank" rel="noopener noreferrer">
-                        <button className="btn-secondary">Read Paper</button>
-                      </a>
-                      <a href="https://sierra.ai/uk/blog/benchmarking-ai-agents" target="_blank" rel="noopener noreferrer">
-                        <button className="btn-secondary">Read Blog Post</button>
-                      </a>
+                    <div className="hero-dropdown" onMouseEnter={() => setHeroBlogDropdownOpen(true)} onMouseLeave={() => setHeroBlogDropdownOpen(false)}>
+                      <button className="btn-secondary">
+                        Blog Posts <span className="dropdown-arrow">▾</span>
+                      </button>
+                      <div className={`hero-dropdown-menu ${heroBlogDropdownOpen ? 'open' : ''}`}>
+                        <a href="https://sierra.ai/blog/bench-advancing-agent-benchmarking-to-knowledge-and-voice" target="_blank" rel="noopener noreferrer">τ³-bench</a>
+                        <a href="https://sierra.ai/blog/benchmarking-agents-in-collaborative-real-world-scenarios" target="_blank" rel="noopener noreferrer">τ²-bench</a>
+                        <a href="https://sierra.ai/blog/benchmarking-ai-agents" target="_blank" rel="noopener noreferrer">τ-bench</a>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                <LeaderboardPreview onViewFullLeaderboard={() => navigateTo('leaderboard')} />
               </div>
             </div>
           </section>
@@ -203,10 +250,6 @@ function App() {
         <div className="container">
           <p>
             For questions or feedback, contact{' '}
-            <a href="mailto:victor@sierra.ai" className="footer-email">
-              victor@sierra.ai
-            </a>
-            {' '}or{' '}
             <a href="mailto:ben.s@sierra.ai" className="footer-email">
               ben.s@sierra.ai
             </a>

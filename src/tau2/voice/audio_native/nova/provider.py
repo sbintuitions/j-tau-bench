@@ -670,7 +670,8 @@ class NovaSonicProvider:
         """Send audio data to the input stream.
 
         Audio should be in LPCM 16kHz format. If you have μ-law audio,
-        convert it first using audio_utils.telephony_to_nova_input().
+        convert it first using ``StreamingTelephonyConverter`` (see
+        ``tau2.voice.audio_native.audio_converter``).
 
         Args:
             audio_data: Raw audio bytes in LPCM 16kHz format.

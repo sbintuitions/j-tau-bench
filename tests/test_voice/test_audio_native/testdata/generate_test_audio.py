@@ -7,7 +7,9 @@ These audio files are shared across all audio native provider tests (Nova, Gemin
 Usage:
     python tests/test_voice/test_audio_native/testdata/generate_test_audio.py
 
-Output format: WAV, 16kHz, 16-bit, mono (compatible with most provider inputs)
+Output formats:
+    - WAV, 16kHz, 16-bit, mono (compatible with most provider inputs)
+    - .ulaw, 8kHz, mu-law (telephony format for DiscreteTimeAdapter tests)
 """
 
 import os
@@ -17,8 +19,10 @@ import wave
 # Add src to path
 sys.path.insert(0, "src")
 
+from tau2.data_model.audio import AudioData, AudioEncoding, AudioFormat
 from tau2.data_model.voice import ElevenLabsTTSConfig
 from tau2.data_model.voice_personas import get_elevenlabs_voice_id
+from tau2.voice.utils.audio_preprocessing import convert_to_ulaw, resample_audio
 from tau2.voice.utils.elevenlabs_utils import tts_elevenlabs
 
 # Test utterances to generate
@@ -86,8 +90,24 @@ def generate_test_audio():
 
             duration_ms = len(raw_pcm) / 32  # 32 bytes per ms at 16kHz 16-bit
             print(
-                f"   ✅ Saved: {output_path} ({len(raw_pcm)} bytes, {duration_ms:.0f}ms)"
+                f"   ✅ WAV: {output_path} ({len(raw_pcm)} bytes, {duration_ms:.0f}ms)"
             )
+
+            # Also generate telephony format (.ulaw) for adapter-level tests
+            ulaw_path = os.path.join(OUTPUT_DIR, f"{filename}.ulaw")
+            audio = AudioData(
+                data=raw_pcm,
+                format=AudioFormat(encoding=AudioEncoding.PCM_S16LE, sample_rate=16000),
+            )
+            audio = resample_audio(audio, 8000)
+            audio = convert_to_ulaw(audio)
+            with open(ulaw_path, "wb") as f:
+                f.write(audio.data)
+            ulaw_duration_ms = len(audio.data) / 8
+            print(
+                f"   ✅ ulaw: {ulaw_path} ({len(audio.data)} bytes, {ulaw_duration_ms:.0f}ms)"
+            )
+
             generated.append(output_path)
 
         except Exception as e:

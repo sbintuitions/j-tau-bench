@@ -19,6 +19,7 @@ from typing import List, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tau2.voice.audio_native.openai.tick_runner import TickResult
 
 from tau2.agent.discrete_time_audio_native_agent import (
     DiscreteTimeAgentState,
@@ -32,7 +33,6 @@ from tau2.data_model.message import (
     UserMessage,
 )
 from tau2.environment.tool import Tool
-from tau2.voice.audio_native.openai.tick_runner import TickResult
 
 # =============================================================================
 # Mock TickResult Helper
@@ -684,19 +684,6 @@ class TestConfiguration:
 
         assert agent.vad_config.mode == OpenAIVADMode.MANUAL
         assert agent.vad_config.threshold == 0.8
-
-    def test_buffer_until_complete_flag(
-        self, mock_tools: List[Tool], domain_policy: str, mock_adapter
-    ):
-        """Test buffer_until_complete flag is stored."""
-        agent = DiscreteTimeAudioNativeAgent(
-            tools=mock_tools,
-            domain_policy=domain_policy,
-            adapter=mock_adapter,
-            buffer_until_complete=True,
-        )
-
-        assert agent.buffer_until_complete is True
 
     def test_send_audio_instant_flag(
         self, mock_tools: List[Tool], domain_policy: str, mock_adapter

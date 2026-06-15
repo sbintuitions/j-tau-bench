@@ -32,7 +32,7 @@ Reference: https://docs.x.ai/docs/guides/voice/agent
 import asyncio
 import base64
 import json
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from loguru import logger
 
@@ -40,9 +40,6 @@ from tau2.config import (
     DEFAULT_AUDIO_NATIVE_CONNECT_TIMEOUT,
     DEFAULT_AUDIO_NATIVE_DISCONNECT_TIMEOUT,
     DEFAULT_AUDIO_NATIVE_TICK_TIMEOUT_BUFFER,
-    DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS,
-    DEFAULT_TELEPHONY_RATE,
-    TELEPHONY_ULAW_SILENCE,
 )
 from tau2.data_model.message import ToolCall
 from tau2.environment.tool import Tool
@@ -51,8 +48,6 @@ from tau2.voice.audio_native.async_loop import BackgroundAsyncLoop
 from tau2.voice.audio_native.tick_result import (
     TickResult,
     UtteranceTranscript,
-    buffer_excess_audio,
-    get_proportional_transcript,
 )
 from tau2.voice.audio_native.xai.events import (
     XAIAudioDeltaEvent,
@@ -72,12 +67,6 @@ from tau2.voice.audio_native.xai.provider import (
 )
 
 # xAI with G.711 μ-law at 8kHz = 8000 bytes per second (1 byte per sample)
-XAI_TELEPHONY_BYTES_PER_SECOND = DEFAULT_TELEPHONY_RATE  # 8000
-
-
-def calculate_bytes_per_tick(tick_duration_ms: int) -> int:
-    """Calculate bytes per tick for G.711 μ-law at 8kHz."""
-    return int(XAI_TELEPHONY_BYTES_PER_SECOND * tick_duration_ms / 1000)
 
 
 class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
@@ -100,12 +89,11 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
         provider: Optional provider instance. Created lazily if not provided.
     """
 
-    VOIP_PACKET_INTERVAL_MS = DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS
-
     def __init__(
         self,
         tick_duration_ms: int,
         send_audio_instant: bool = True,
+        reasoning_effort: Optional[str] = None,
         provider: Optional[XAIRealtimeProvider] = None,
         voice: str = "Ara",
     ):
@@ -114,14 +102,18 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
         Args:
             tick_duration_ms: Duration of each tick in milliseconds. Must be > 0.
             send_audio_instant: If True, send audio in one call (discrete-time mode).
+            reasoning_effort: Not supported by xAI. Must be None.
             provider: Optional provider instance. Created lazily if not provided.
             voice: Voice to use. One of: Ara, Rex, Sal, Eve, Leo. Default: Ara.
         """
-        super().__init__(tick_duration_ms)
+        if reasoning_effort is not None:
+            raise ValueError(
+                f"xAI provider does not support reasoning_effort (got '{reasoning_effort}')"
+            )
+        super().__init__(tick_duration_ms, send_audio_instant=send_audio_instant)
 
-        self.send_audio_instant = send_audio_instant
         self._chunk_size = int(
-            XAI_TELEPHONY_BYTES_PER_SECOND * self.VOIP_PACKET_INTERVAL_MS / 1000
+            self.audio_format.bytes_per_second * self._voip_interval_ms / 1000
         )
         self.voice = voice
 
@@ -132,19 +124,6 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
         # Async event loop management
         self._bg_loop = BackgroundAsyncLoop()
         self._connected = False
-
-        # Tick state
-        self._tick_count = 0
-        self._cumulative_user_audio_ms = 0
-
-        # Buffered audio and transcripts
-        self._buffered_agent_audio: List[Tuple[bytes, Optional[str]]] = []
-        self._utterance_transcripts: dict[str, UtteranceTranscript] = {}
-        self._current_item_id: Optional[str] = None
-        self._skip_item_id: Optional[str] = None
-
-        # Tool result queue (for sending tool results in next tick)
-        self._pending_tool_results: List[Tuple[str, str, bool]] = []
 
     @property
     def provider(self) -> XAIRealtimeProvider:
@@ -233,8 +212,7 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
         self._connected = False
         self._tick_count = 0
         self._cumulative_user_audio_ms = 0
-        self._buffered_agent_audio.clear()
-        self._utterance_transcripts.clear()
+        self.clear_buffers()
         logger.info("DiscreteTimeXAIAdapter disconnected")
 
     async def _async_disconnect(self) -> None:
@@ -245,15 +223,7 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
     def run_tick(
         self, user_audio: bytes, tick_number: Optional[int] = None
     ) -> TickResult:
-        """Run one tick of the simulation.
-
-        Args:
-            user_audio: User audio bytes in telephony format (8kHz μ-law).
-            tick_number: Optional tick number for logging.
-
-        Returns:
-            TickResult with audio in telephony format (8kHz μ-law).
-        """
+        """Run one tick of the simulation."""
         if not self.is_connected:
             raise RuntimeError("Not connected to xAI API. Call connect() first.")
 
@@ -271,85 +241,42 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
             logger.error(f"Error in run_tick (tick={tick_number}): {e}")
             raise
 
-    async def _async_run_tick(self, user_audio: bytes, tick_number: int) -> TickResult:
-        """Async tick execution."""
-        # Send any pending tool results first
-        for call_id, result_str, request_response in self._pending_tool_results:
+    async def _flush_pending_tool_results(self) -> None:
+        """Send pending tool results to xAI."""
+        for (
+            call_id,
+            result_str,
+            request_response,
+            _is_error,
+        ) in self._pending_tool_results:
             await self.provider.send_tool_result(call_id, result_str, request_response)
         self._pending_tool_results.clear()
 
-        # Calculate timing
-        tick_start = asyncio.get_running_loop().time()
-
-        # Create tick result
-        result = TickResult(
-            tick_number=tick_number,
-            audio_sent_bytes=len(user_audio),
-            audio_sent_duration_ms=(len(user_audio) / XAI_TELEPHONY_BYTES_PER_SECOND)
-            * 1000,
-            user_audio_data=user_audio,
-            cumulative_user_audio_at_tick_start_ms=self._cumulative_user_audio_ms,
-            bytes_per_tick=self.bytes_per_tick,
-            bytes_per_second=XAI_TELEPHONY_BYTES_PER_SECOND,
-            silence_byte=TELEPHONY_ULAW_SILENCE,
-        )
-
-        # Add any buffered agent audio from previous tick
-        for chunk_data, item_id in self._buffered_agent_audio:
-            result.agent_audio_chunks.append((chunk_data, item_id))
-        self._buffered_agent_audio.clear()
-
-        # Carry over skip state from previous tick
-        result.skip_item_id = self._skip_item_id
-
-        # Send audio and receive events concurrently
-        async def send_audio():
-            """Send audio (instant or chunked based on config)."""
-            if len(user_audio) == 0:
-                return
-            if self.send_audio_instant:
-                await self.provider.send_audio(user_audio)
-            else:
-                offset = 0
-                while offset < len(user_audio):
-                    chunk = user_audio[offset : offset + self._chunk_size]
-                    await self.provider.send_audio(chunk)
-                    offset += len(chunk)
-                    await asyncio.sleep(self.VOIP_PACKET_INTERVAL_MS / 1000)
+    async def _execute_tick(
+        self,
+        user_audio: bytes,
+        tick_number: int,
+        result: TickResult,
+        tick_start: float,
+    ) -> None:
+        """xAI-specific: send audio, receive events, process events."""
 
         async def receive_events():
             elapsed_so_far = asyncio.get_running_loop().time() - tick_start
             remaining = max(0.01, (self.tick_duration_ms / 1000) - elapsed_so_far)
             return await self.provider.receive_events_for_duration(remaining)
 
-        _, events = await asyncio.gather(send_audio(), receive_events())
-
-        # Process all received events
-        for event in events:
-            await self._process_event(result, event)
-
-        # Record simulation timing
-        result.tick_sim_duration_ms = result.audio_sent_duration_ms
-
-        # Move excess agent audio to buffer for next tick
-        self._buffered_agent_audio = buffer_excess_audio(result, self.bytes_per_tick)
-
-        # Calculate proportional transcript
-        result.proportional_transcript = get_proportional_transcript(
-            result.agent_audio_chunks, self._utterance_transcripts
+        _, events = await asyncio.gather(
+            self._send_audio_chunked(
+                user_audio, self.provider.send_audio, self._chunk_size
+            ),
+            receive_events(),
         )
 
-        # Update skip state for next tick
-        self._skip_item_id = result.skip_item_id
+        for event in events:
+            self._process_event(result, event)
 
-        # Update cumulative user audio tracking
-        self._cumulative_user_audio_ms += int(result.audio_sent_duration_ms)
-
-        logger.info(f"Tick {tick_number} completed:\n{result.summary()}")
-
-        return result
-
-    async def _process_event(self, result: TickResult, event: Any) -> None:
+    def _process_event(self, result: TickResult, event: Any) -> None:
         """Process an xAI event."""
         result.events.append(event)
 
@@ -433,28 +360,3 @@ class DiscreteTimeXAIAdapter(DiscreteTimeAdapter):
 
         else:
             logger.debug(f"Event {type(event).__name__} received")
-
-    def send_tool_result(
-        self,
-        call_id: str,
-        result: str,
-        request_response: bool = True,
-        is_error: bool = False,
-    ) -> None:
-        """Queue a tool result to be sent in the next tick.
-
-        Args:
-            call_id: The tool call ID.
-            result: The tool result as a string.
-            request_response: If True, request a response after sending.
-            is_error: If True, the tool call failed. Currently unused by xAI.
-        """
-        self._pending_tool_results.append((call_id, result, request_response))
-        logger.debug(f"Queued tool result for call_id={call_id}")
-
-    def clear_buffers(self) -> None:
-        """Clear all internal audio and transcript buffers."""
-        self._buffered_agent_audio.clear()
-        self._utterance_transcripts.clear()
-        self._pending_tool_results.clear()
-        self._skip_item_id = None

@@ -21,9 +21,6 @@ from tau2.agent.base_agent import (
     ValidAgentInputMessage,
 )
 from tau2.agent.llm_agent import LLMAgent, LLMAgentState, LLMGTAgent, LLMSoloAgent
-# NOTE: Commented out to run without voice extras
-# from tau2.voice.audio_native.openai import OpenAIRealtimeProvider
-# from tau2.voice.audio_native.openai.provider import OpenAIVADMode
 
 # =============================================================================
 # DEPRECATION ALIASES
@@ -94,10 +91,6 @@ __all__ = [
     "LLMAgentState",
     "LLMGTAgent",
     "LLMSoloAgent",
-    # NOTE: Commented out to run without voice extras
-    # Audio Native
-    # "OpenAIRealtimeProvider",
-    # "OpenAIVADMode",
     # Deprecated aliases (kept for backward compatibility)
     "BaseConversationParticipant",
     "BaseStreamingParticipant",
