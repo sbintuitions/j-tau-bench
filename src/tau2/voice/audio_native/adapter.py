@@ -8,22 +8,27 @@ create_adapter(): Factory function that validates parameters and constructs
    the appropriate adapter subclass for a given provider.
 """
 
+import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, List, Optional, Tuple
 
 from loguru import logger
 
 from tau2.config import (
     DEFAULT_AUDIO_NATIVE_MODELS,
-    DEFAULT_BUFFER_UNTIL_COMPLETE,
-    DEFAULT_FAST_FORWARD_MODE,
+    DEFAULT_AUDIO_NATIVE_REASONING_EFFORT,
+    DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS,
     DEFAULT_SEND_AUDIO_INSTANT,
+    TELEPHONY_ULAW_SILENCE,
 )
 from tau2.data_model.audio import TELEPHONY_AUDIO_FORMAT, AudioFormat
 from tau2.environment.tool import Tool
-
-if TYPE_CHECKING:
-    from tau2.voice.audio_native.tick_result import TickResult
+from tau2.voice.audio_native.tick_result import (
+    TickResult,
+    UtteranceTranscript,
+    buffer_excess_audio,
+    get_proportional_transcript,
+)
 
 
 class DiscreteTimeAdapter(ABC):
@@ -61,6 +66,7 @@ class DiscreteTimeAdapter(ABC):
         self,
         tick_duration_ms: int,
         audio_format: Optional[AudioFormat] = None,
+        send_audio_instant: bool = DEFAULT_SEND_AUDIO_INSTANT,
     ):
         """Initialize the adapter.
 
@@ -69,6 +75,8 @@ class DiscreteTimeAdapter(ABC):
             audio_format: Audio format for the external interface. Defaults to
                 telephony (8kHz μ-law). Subclasses may pass a different format
                 if their provider uses a non-telephony external format.
+            send_audio_instant: If True, send all audio in one call per tick.
+                If False, send in VoIP-style 20ms chunks with sleeps.
 
         Raises:
             ValueError: If tick_duration_ms is <= 0.
@@ -81,6 +89,22 @@ class DiscreteTimeAdapter(ABC):
         self.bytes_per_tick = int(
             self.audio_format.bytes_per_second * tick_duration_ms / 1000
         )
+        self.send_audio_instant = send_audio_instant
+        self._voip_interval_ms = DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS
+
+        # Shared tick state (managed by _async_run_tick template)
+        self._tick_count: int = 0
+        self._cumulative_user_audio_ms: int = 0
+        self._buffered_agent_audio: List[Tuple[bytes, Optional[str]]] = []
+        self._utterance_transcripts: dict[str, UtteranceTranscript] = {}
+        self._current_item_id: Optional[str] = None
+        self._skip_item_id: Optional[str] = None
+        self._pending_tool_results: List[Tuple] = []
+
+        # Optional item-ID mapping (used by Nova where audio and text have
+        # different content IDs). Subclasses that need it should populate this
+        # dict; get_proportional_transcript will forward it automatically.
+        self._item_id_map: Optional[dict[str, str]] = None
 
     @abstractmethod
     def connect(
@@ -116,36 +140,22 @@ class DiscreteTimeAdapter(ABC):
         self,
         user_audio: bytes,
         tick_number: Optional[int] = None,
-    ) -> "TickResult":
+    ) -> TickResult:
         """Run one tick of the simulation.
 
-        This is the primary method for discrete-time interaction.
-
-        Guarantees imposed by tick_duration_ms:
-        - Agent audio output is capped to at most bytes_per_tick bytes per
-          tick. Any excess is buffered for the next tick.
-        - For streaming providers (bidirectional WebSocket), each tick takes
-          at least tick_duration_ms of wall-clock time to maintain real-time
-          pacing. Implementations achieve this either via an explicit sleep
-          or by collecting events for the full duration. Cascaded providers
-          (e.g., STT → LLM → TTS pipelines) may complete ticks faster since
-          processing is request/response rather than continuous streaming.
+        Subclasses implement this to bridge sync/async (e.g., via BackgroundAsyncLoop).
+        The async work should delegate to _async_run_tick() which provides the
+        shared tick lifecycle (buffering, transcript, etc.).
 
         Args:
             user_audio: User audio bytes for this tick (in audio_format encoding).
             tick_number: Optional tick number for logging/tracking.
 
         Returns:
-            TickResult containing:
-            - Raw agent audio (agent_audio_data) for speech detection
-            - Padded agent audio (get_played_agent_audio()) for playback
-            - Proportional transcript for this tick
-            - All API events received during the tick
-            - Timing and interruption information
+            TickResult with capped audio, proportional transcript, events.
         """
         raise NotImplementedError
 
-    @abstractmethod
     def send_tool_result(
         self,
         call_id: str,
@@ -153,18 +163,162 @@ class DiscreteTimeAdapter(ABC):
         request_response: bool = True,
         is_error: bool = False,
     ) -> None:
-        """Queue a tool result to be sent in the next tick.
+        """Queue a tool result to be sent in the next tick."""
+        self._pending_tool_results.append((call_id, result, request_response, is_error))
+        logger.debug(f"Queued tool result for call_id={call_id}")
 
-        Tool results are typically queued and sent at the start of the next
-        run_tick() call to maintain proper timing in discrete-time simulation.
+    def clear_buffers(self) -> None:
+        """Reset all internal tick state."""
+        self._buffered_agent_audio.clear()
+        self._utterance_transcripts.clear()
+        self._pending_tool_results.clear()
+        self._skip_item_id = None
+
+    # -----------------------------------------------------------------------
+    # Tick lifecycle template
+    # -----------------------------------------------------------------------
+
+    async def _async_run_tick(self, user_audio: bytes, tick_number: int) -> TickResult:
+        """Template method for the tick lifecycle.
+
+        Handles shared pre/post processing around _execute_tick():
+        - Flush pending tool results
+        - Create TickResult with timing info
+        - Prepend buffered audio from previous tick
+        - Call _execute_tick() for provider-specific work
+        - Cap audio to bytes_per_tick, buffer excess
+        - Compute proportional transcript
+        - Update cumulative state
+
+        Subclasses implement _execute_tick() and _flush_pending_tool_results().
+        """
+        tick_start = asyncio.get_running_loop().time()
+
+        # 1. Flush pending tool results
+        await self._flush_pending_tool_results()
+
+        # 2. Create tick result
+        result = TickResult(
+            tick_number=tick_number,
+            audio_sent_bytes=len(user_audio),
+            audio_sent_duration_ms=(
+                len(user_audio) / self.audio_format.bytes_per_second
+            )
+            * 1000,
+            user_audio_data=user_audio,
+            cumulative_user_audio_at_tick_start_ms=self._cumulative_user_audio_ms,
+            bytes_per_tick=self.bytes_per_tick,
+            bytes_per_second=self.audio_format.bytes_per_second,
+            silence_byte=TELEPHONY_ULAW_SILENCE,
+        )
+
+        # 3. Prepend buffered audio from previous tick
+        for chunk_data, item_id in self._buffered_agent_audio:
+            result.agent_audio_chunks.append((chunk_data, item_id))
+        self._buffered_agent_audio.clear()
+
+        # 4. Carry over skip state
+        result.skip_item_id = self._skip_item_id
+
+        # 5. Provider-specific: send audio, receive events, process events
+        await self._execute_tick(user_audio, tick_number, result, tick_start)
+
+        # 6. Record simulation timing
+        result.tick_sim_duration_ms = result.audio_sent_duration_ms
+
+        # 7. Cap audio to bytes_per_tick, buffer excess for next tick
+        self._buffered_agent_audio = buffer_excess_audio(result, self.bytes_per_tick)
+
+        # 8. Compute proportional transcript
+        result.proportional_transcript = get_proportional_transcript(
+            result.agent_audio_chunks,
+            self._utterance_transcripts,
+            item_id_map=self._item_id_map,
+        )
+
+        # 9. Update skip state for next tick
+        self._skip_item_id = result.skip_item_id
+
+        # 10. Update cumulative user audio tracking
+        self._cumulative_user_audio_ms += int(result.audio_sent_duration_ms)
+
+        # 11. Enforce minimum tick duration (safety net)
+        elapsed = asyncio.get_running_loop().time() - tick_start
+        remaining = (self.tick_duration_ms / 1000) - elapsed
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+        logger.info(f"Tick {tick_number} completed:\n{result.summary()}")
+        return result
+
+    @abstractmethod
+    async def _execute_tick(
+        self,
+        user_audio: bytes,
+        tick_number: int,
+        result: TickResult,
+        tick_start: float,
+    ) -> None:
+        """Provider-specific tick execution. Mutate result in place.
 
         Args:
-            call_id: The tool call ID.
-            result: The tool result as a string.
-            request_response: If True, request a response after sending.
-            is_error: If True, the tool call failed and result contains error details.
+            user_audio: User audio bytes (in external format).
+            tick_number: Current tick number.
+            result: TickResult to populate with events, audio, etc.
+            tick_start: asyncio loop time when the tick started. Use this
+                to compute remaining time for receive_events_for_duration().
+
+        Responsibilities:
+        - Convert audio format if needed
+        - Send audio to provider API
+        - Receive events for the remaining tick duration
+        - Process events (append to result.agent_audio_chunks,
+          result.tool_calls, result.vad_events, result.events)
+        - Track utterance transcripts via self._utterance_transcripts
+        - Set result.was_truncated and result.skip_item_id on barge-in
         """
         raise NotImplementedError
+
+    @abstractmethod
+    async def _flush_pending_tool_results(self) -> None:
+        """Send all pending tool results to the provider.
+
+        Called at the start of each tick. Provider-specific because each
+        API has different batching semantics (e.g., Gemini batches all
+        results in one call, others send individually).
+
+        After sending, clear self._pending_tool_results.
+        """
+        raise NotImplementedError
+
+    # -----------------------------------------------------------------------
+    # Shared helpers
+    # -----------------------------------------------------------------------
+
+    async def _send_audio_chunked(
+        self,
+        audio: bytes,
+        send_fn: Callable[[bytes], Awaitable[None]],
+        chunk_size: int,
+    ) -> None:
+        """Send audio either instantly or in VoIP-style chunks.
+
+        Args:
+            audio: Audio bytes to send (in provider's format).
+            send_fn: Async callable that sends a chunk to the provider.
+            chunk_size: Bytes per chunk when using VoIP-style sending.
+        """
+        if len(audio) == 0:
+            return
+        if self.send_audio_instant:
+            await send_fn(audio)
+        else:
+            offset = 0
+            while offset < len(audio):
+                chunk = audio[offset : offset + chunk_size]
+                await send_fn(chunk)
+                offset += len(chunk)
+                await asyncio.sleep(self._voip_interval_ms / 1000)
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +333,8 @@ def create_adapter(
     provider: str,
     tick_duration_ms: int,
     send_audio_instant: bool = DEFAULT_SEND_AUDIO_INSTANT,
-    buffer_until_complete: bool = DEFAULT_BUFFER_UNTIL_COMPLETE,
-    fast_forward_mode: bool = DEFAULT_FAST_FORWARD_MODE,
     model: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
     audio_format: Optional[AudioFormat] = None,
     cascaded_config: Any = None,
 ) -> Tuple[DiscreteTimeAdapter, str]:
@@ -193,13 +346,9 @@ def create_adapter(
 
     Args:
         provider: Provider identifier (openai, gemini, xai, nova, qwen,
-            deepgram, livekit).
+            livekit).
         tick_duration_ms: Duration of each tick in milliseconds.
         send_audio_instant: If True, send audio in one call per tick.
-        buffer_until_complete: If True, wait for complete utterances before
-            releasing audio. Only supported by the OpenAI provider.
-        fast_forward_mode: If True, exit tick early when enough audio is
-            buffered. Only supported by the OpenAI provider.
         model: Model identifier. If None, uses the provider's default.
         audio_format: Audio format for external communication. Defaults to
             telephony (8kHz μ-law).
@@ -209,26 +358,11 @@ def create_adapter(
         Tuple of (adapter, resolved_model).
 
     Raises:
-        ValueError: If buffer_until_complete or fast_forward_mode is used
-            with a non-OpenAI provider, or if the provider is unknown.
+        ValueError: If the provider is unknown.
     """
-    # --- Validate OpenAI-only parameters ---
-    if buffer_until_complete and provider != "openai":
-        raise ValueError(
-            f"buffer_until_complete is only supported by the 'openai' provider, "
-            f"got provider='{provider}'."
-        )
-    if fast_forward_mode:
-        if provider != "openai":
-            raise ValueError(
-                f"fast_forward_mode is only supported by the 'openai' provider, "
-                f"got provider='{provider}'."
-            )
-        logger.warning(
-            "Fast-forward mode is enabled. The simulation will run as fast as "
-            "possible rather than in real-time. This may affect timing-sensitive "
-            "behaviors and produce results that differ from real-time execution."
-        )
+    # --- Resolve reasoning_effort default ---
+    if reasoning_effort is None:
+        reasoning_effort = DEFAULT_AUDIO_NATIVE_REASONING_EFFORT.get(provider)
 
     # --- Resolve model default ---
     if model is None:
@@ -252,16 +386,15 @@ def create_adapter(
     adapter: DiscreteTimeAdapter
     if provider == "openai":
         from tau2.voice.audio_native.openai.discrete_time_adapter import (
-            DiscreteTimeAudioNativeAdapter,
+            DiscreteTimeOpenAIAdapter,
         )
 
-        adapter = DiscreteTimeAudioNativeAdapter(
+        adapter = DiscreteTimeOpenAIAdapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
-            buffer_until_complete=buffer_until_complete,
             model=model,
+            reasoning_effort=reasoning_effort,
             audio_format=audio_format,
-            fast_forward_mode=fast_forward_mode,
         )
     elif provider == "gemini":
         from tau2.voice.audio_native.gemini.discrete_time_adapter import (
@@ -272,6 +405,7 @@ def create_adapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
             model=model,
+            reasoning_effort=reasoning_effort,
         )
     elif provider == "xai":
         from tau2.voice.audio_native.xai.discrete_time_adapter import (
@@ -281,6 +415,7 @@ def create_adapter(
         adapter = DiscreteTimeXAIAdapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
+            reasoning_effort=reasoning_effort,
         )
     elif provider == "nova":
         from tau2.voice.audio_native.nova.discrete_time_adapter import (
@@ -291,6 +426,7 @@ def create_adapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
             model=model,
+            reasoning_effort=reasoning_effort,
         )
     elif provider == "qwen":
         from tau2.voice.audio_native.qwen.discrete_time_adapter import (
@@ -301,16 +437,7 @@ def create_adapter(
             tick_duration_ms=tick_duration_ms,
             send_audio_instant=send_audio_instant,
             model=model,
-        )
-    elif provider == "deepgram":
-        from tau2.voice.audio_native.deepgram.discrete_time_adapter import (
-            DiscreteTimeDeepgramAdapter,
-        )
-
-        adapter = DiscreteTimeDeepgramAdapter(
-            tick_duration_ms=tick_duration_ms,
-            send_audio_instant=send_audio_instant,
-            llm_model=model,
+            reasoning_effort=reasoning_effort,
         )
     elif provider == "livekit":
         from tau2.voice.audio_native.livekit.config import CascadedConfig

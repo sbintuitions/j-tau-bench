@@ -1,10 +1,12 @@
+import json
+from collections.abc import Iterator
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Annotated
 
 if TYPE_CHECKING:
@@ -18,13 +20,12 @@ from tau2.config import (
     DEFAULT_BACKCHANNEL_MAX_THRESHOLD_SECONDS,
     DEFAULT_BACKCHANNEL_MIN_THRESHOLD_SECONDS,
     DEFAULT_BACKCHANNEL_POISSON_RATE,
-    DEFAULT_BUFFER_UNTIL_COMPLETE,
-    DEFAULT_FAST_FORWARD_MODE,
     DEFAULT_INTEGRATION_DURATION_SECONDS,
     DEFAULT_INTERRUPTION_CHECK_INTERVAL_SECONDS,
     DEFAULT_LLM_AGENT,
     DEFAULT_LLM_ARGS_AGENT,
     DEFAULT_LLM_ARGS_USER,
+    DEFAULT_LLM_EVAL_USER_SIMULATOR,
     DEFAULT_LLM_USER,
     DEFAULT_LOG_LEVEL,
     DEFAULT_MAX_CONCURRENCY,
@@ -58,6 +59,8 @@ from tau2.environment.toolkit import ToolType
 from tau2.orchestrator.modes import CommunicationMode
 from tau2.utils.utils import get_now
 
+SIMULATIONS_DIR = "simulations"
+
 
 class AudioNativeConfig(BaseModel):
     """Configuration for audio-native mode using DiscreteTimeAudioNativeAgent.
@@ -67,11 +70,9 @@ class AudioNativeConfig(BaseModel):
     """
 
     # Provider selection
-    provider: Literal[
-        "openai", "gemini", "xai", "nova", "qwen", "deepgram", "livekit"
-    ] = Field(
+    provider: Literal["openai", "gemini", "xai", "nova", "qwen", "livekit"] = Field(
         default=DEFAULT_AUDIO_NATIVE_PROVIDER,
-        description="Audio native API provider: 'openai' (OpenAI Realtime), 'gemini' (Gemini Live), 'xai' (xAI Grok Voice Agent), 'nova' (Amazon Nova Sonic), 'qwen' (Alibaba Qwen Omni), 'deepgram' (Deepgram Voice Agent), or 'livekit' (LiveKit cascaded STT→LLM→TTS)",
+        description="Audio native API provider: 'openai' (OpenAI Realtime), 'gemini' (Gemini Live), 'xai' (xAI Grok Voice Agent), 'nova' (Amazon Nova Sonic), 'qwen' (Alibaba Qwen Omni), or 'livekit' (LiveKit cascaded STT→LLM→TTS)",
     )
 
     # Cascaded config (for livekit provider)
@@ -83,6 +84,10 @@ class AudioNativeConfig(BaseModel):
     model: str = Field(
         default=DEFAULT_AUDIO_NATIVE_MODELS[DEFAULT_AUDIO_NATIVE_PROVIDER],
         description="Audio native model to use",
+    )
+    reasoning_effort: Optional[str] = Field(
+        default=None,
+        description="Reasoning effort for thinking models: 'minimal', 'low', 'medium', 'high'. If None, not sent.",
     )
 
     # Timing configuration
@@ -152,14 +157,6 @@ class AudioNativeConfig(BaseModel):
     )
 
     # Agent behavior
-    buffer_until_complete: bool = Field(
-        default=DEFAULT_BUFFER_UNTIL_COMPLETE,
-        description="Buffer audio until complete utterance (OpenAI only)",
-    )
-    fast_forward_mode: bool = Field(
-        default=DEFAULT_FAST_FORWARD_MODE,
-        description="Skip wall-clock waiting when enough audio is buffered (OpenAI only)",
-    )
     use_xml_prompt: bool = Field(
         default=False,
         description="Use XML tags in system prompt. Defaults to False (plain text) for all providers.",
@@ -423,6 +420,13 @@ class BaseRunConfig(BaseModel):
             default="full",
         ),
     ]
+    review_model: Annotated[
+        str,
+        Field(
+            description="LLM model to use for review calls when auto_review is enabled.",
+            default=DEFAULT_LLM_EVAL_USER_SIMULATOR,
+        ),
+    ]
     hallucination_retries: Annotated[
         int,
         Field(
@@ -459,6 +463,13 @@ class BaseRunConfig(BaseModel):
     ]
 
     # ---- Abstract-ish properties (subclasses must override) ----
+
+    @model_validator(mode="after")
+    def _default_banking_retrieval_config(self) -> "BaseRunConfig":
+        """Default retrieval_config to alltools for banking_knowledge."""
+        if self.domain == "banking_knowledge" and self.retrieval_config is None:
+            object.__setattr__(self, "retrieval_config", "alltools")
+        return self
 
     @property
     def effective_agent(self) -> str:
@@ -1339,9 +1350,37 @@ class SimulationRun(BaseModel):
         return []
 
 
+class SimulationIndexEntry(BaseModel):
+    """Lightweight summary of a simulation for the dir-format index.
+
+    Stored in results.json alongside metadata so that external consumers
+    (e.g. the web leaderboard) can access simulation summaries without
+    fetching individual simulation files. Also used for integrity
+    validation on load.
+    """
+
+    id: str
+    task_id: int | str
+    trial: int
+    reward: float | None = None
+    termination_reason: str | None = None
+    agent_cost: float | None = None
+    duration: float | None = None
+
+
 class Results(BaseModel):
     """
-    Run results
+    Run results.
+
+    Supports two storage formats:
+    - "json": single monolithic JSON file with all data (default for text runs).
+    - "dir": metadata in results.json + individual simulation files in a
+      simulations/ subdirectory (default for voice runs — enables random
+      access and O(1) checkpointing for large simulation files).
+
+    Use load()/save() for full round-trip. Use load_metadata() for fast metadata
+    access, iter_simulations() for streaming, and df_from_path() for streaming
+    DataFrame construction.
     """
 
     timestamp: Optional[str] = Field(
@@ -1349,88 +1388,310 @@ class Results(BaseModel):
     )
     info: Info = Field(description="Information.")
     tasks: list[Task] = Field(description="The list of tasks.")
-    simulations: list[SimulationRun] = Field(description="The list of simulations.")
+    simulations: list[SimulationRun] = Field(
+        description="The list of simulations.", default_factory=list
+    )
+    simulation_index: list[SimulationIndexEntry] | None = Field(
+        default=None,
+        description="Lightweight simulation summaries for dir format. "
+        "Populated on save (dir format) and used for integrity validation "
+        "on load and by the web frontend.",
+    )
+
+    # ---- Format detection and path resolution ----
+
+    @staticmethod
+    def _detect_format(path: Path) -> Literal["json", "dir"]:
+        """Detect storage format from path.
+
+        Returns "dir" if path is a directory or has a sibling simulations/
+        subdirectory, otherwise "json" (monolithic format).
+        """
+        path = Path(path)
+        if path.is_dir():
+            return "dir"
+        sims_dir = path.parent / SIMULATIONS_DIR
+        if sims_dir.is_dir():
+            return "dir"
+        return "json"
+
+    @staticmethod
+    def _resolve_paths(path: Path) -> tuple[Path, Path]:
+        """Resolve metadata file path and simulations directory from a path.
+
+        Args:
+            path: Either a directory or a results.json file path.
+
+        Returns:
+            Tuple of (metadata_json_path, simulations_directory_path).
+        """
+        path = Path(path)
+        if path.is_dir():
+            return path / "results.json", path / SIMULATIONS_DIR
+        return path, path.parent / SIMULATIONS_DIR
+
+    def _build_simulation_index(self) -> list[SimulationIndexEntry]:
+        """Build a simulation index from the current simulations list."""
+        return [
+            SimulationIndexEntry(
+                id=sim.id,
+                task_id=sim.task_id,
+                trial=sim.trial,
+                reward=sim.reward_info.reward if sim.reward_info else None,
+                termination_reason=sim.termination_reason,
+                agent_cost=sim.agent_cost,
+                duration=sim.duration,
+            )
+            for sim in self.simulations
+        ]
+
+    # ---- Load / Save ----
 
     @classmethod
     def load(cls, path: Path) -> "Results":
-        with open(path, "r") as f:
-            return cls.model_validate_json(f.read())
+        """Load Results from disk, auto-detecting format.
 
-    def save(self, path: Path) -> None:
+        Supports both monolithic JSON and directory-based formats.
+        For directory format, loads results.json metadata and all individual
+        simulation files from the simulations/ subdirectory.
         """
-        Save the results to a file.
+        path = Path(path)
+        fmt = cls._detect_format(path)
+        if fmt == "json":
+            with open(path, "r") as f:
+                return cls.model_validate_json(f.read())
+
+        meta_path, sims_dir = cls._resolve_paths(path)
+        with open(meta_path, "r") as f:
+            meta = json.loads(f.read())
+
+        meta.pop("format_version", None)
+
+        # Validate simulation files against index if present
+        index = meta.get("simulation_index")
+        simulations = []
+        if sims_dir.exists():
+            for sim_file in sorted(sims_dir.glob("*.json")):
+                with open(sim_file, "r") as f:
+                    simulations.append(json.loads(f.read()))
+
+        if index is not None:
+            indexed_ids = {entry["id"] for entry in index}
+            on_disk_ids = (
+                {f.stem for f in sims_dir.glob("*.json")}
+                if sims_dir.exists()
+                else set()
+            )
+            missing = indexed_ids - on_disk_ids
+            extra = on_disk_ids - indexed_ids
+            errors = []
+            if missing:
+                errors.append(f"Missing simulation files: {sorted(missing)}")
+            if extra:
+                errors.append(f"Extra simulation files not in index: {sorted(extra)}")
+            if errors:
+                raise ValueError(
+                    f"Dir format integrity check failed for {meta_path}: "
+                    + "; ".join(errors)
+                )
+
+        meta["simulations"] = simulations
+        return cls.model_validate(meta)
+
+    def save(self, path: Path, format: Literal["json", "dir"] = "json") -> None:
+        """Save the results to disk.
+
+        Args:
+            path: File path (for "json") or directory/file path (for "dir").
+                  For "dir" format, if path ends in .json, the simulations/
+                  subdirectory is created alongside it. If path is a directory,
+                  results.json is created inside it.
+            format: Storage format. "json" writes a single monolithic JSON file.
+                    "dir" writes metadata to results.json and each
+                    simulation to a separate file in simulations/.
         """
-        with open(path, "w") as f:
-            f.write(self.model_dump_json(indent=2))
+        path = Path(path)
+        if format == "json":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w") as f:
+                f.write(self.model_dump_json(indent=2))
+            return
+
+        meta_path, sims_dir = self._resolve_paths(path)
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        sims_dir.mkdir(parents=True, exist_ok=True)
+
+        self.simulation_index = self._build_simulation_index()
+        meta = self.model_dump(mode="json", exclude={"simulations"})
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+        for sim in self.simulations:
+            sim_path = sims_dir / f"{sim.id}.json"
+            with open(sim_path, "w") as f:
+                f.write(sim.model_dump_json(indent=2))
+
+    def save_metadata(self, path: Path) -> None:
+        """Save only metadata to a dir-format results.json.
+
+        Creates the simulations/ subdirectory if needed but does not write
+        or modify any simulation files. Used by the checkpoint system to update
+        metadata (e.g. after adding tasks) without rewriting all sim files.
+
+        Preserves the existing simulation_index from the on-disk results.json
+        if the in-memory simulation_index is not populated.
+        """
+        meta_path, sims_dir = self._resolve_paths(path)
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        sims_dir.mkdir(parents=True, exist_ok=True)
+
+        # Preserve on-disk simulation_index if we don't have one in memory
+        if self.simulation_index is None and meta_path.exists():
+            with open(meta_path, "r") as f:
+                existing = json.loads(f.read())
+            existing_index = existing.get("simulation_index")
+            if existing_index is not None:
+                self.simulation_index = [
+                    SimulationIndexEntry.model_validate(e) for e in existing_index
+                ]
+
+        meta = self.model_dump(mode="json", exclude={"simulations"})
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+    # ---- Streaming / lightweight access ----
+
+    @classmethod
+    def load_metadata(cls, path: Path) -> "Results":
+        """Load only metadata without simulations.
+
+        Returns a Results instance with simulations=[]. For dir format,
+        simulation_index is populated if present. Works with both
+        JSON and directory-based formats.
+        """
+        path = Path(path)
+        fmt = cls._detect_format(path)
+        if fmt == "json":
+            with open(path, "r") as f:
+                data = json.loads(f.read())
+        else:
+            meta_path, _ = cls._resolve_paths(path)
+            with open(meta_path, "r") as f:
+                data = json.loads(f.read())
+
+        data.pop("format_version", None)
+        data.pop("simulations", None)
+        data["simulations"] = []
+        return cls.model_validate(data)
+
+    @classmethod
+    def iter_simulations(cls, path: Path) -> Iterator[SimulationRun]:
+        """Yield simulations one at a time without loading all into memory.
+
+        For directory format, reads each simulation file individually —
+        peak memory is bounded by a single simulation.
+        For JSON format, parses the full file but yields SimulationRun models
+        one at a time to avoid constructing all at once.
+        """
+        path = Path(path)
+        fmt = cls._detect_format(path)
+
+        if fmt == "json":
+            with open(path, "r") as f:
+                data = json.loads(f.read())
+            for sim_data in data.get("simulations", []):
+                yield SimulationRun.model_validate(sim_data)
+        else:
+            _, sims_dir = cls._resolve_paths(path)
+            if sims_dir.exists():
+                for sim_file in sorted(sims_dir.glob("*.json")):
+                    with open(sim_file, "r") as f:
+                        yield SimulationRun.model_validate_json(f.read())
+
+    # ---- DataFrame construction helpers ----
+
+    @staticmethod
+    def _transfer_only(task: Task) -> bool:
+        if task.evaluation_criteria is None:
+            return False
+        if task.evaluation_criteria.actions is None:
+            return False
+        actions = task.evaluation_criteria.actions
+        if len(actions) != 1:
+            return False
+        return "transfer" in actions[0].name.lower()
+
+    @staticmethod
+    def _task_metrics(task: Task) -> dict:
+        eval_metrics = (
+            task.evaluation_criteria.info()
+            if task.evaluation_criteria is not None
+            else {}
+        )
+        num_actions = (
+            eval_metrics["num_agent_actions"] + eval_metrics["num_user_actions"]
+        )
+        if Results._transfer_only(task):
+            num_actions = -1
+        return {
+            "task_num_agent_actions": eval_metrics["num_agent_actions"],
+            "task_num_user_actions": eval_metrics["num_user_actions"],
+            "task_num_actions": num_actions,
+            "task_num_env_assertions": eval_metrics["num_env_assertions"],
+            "task_num_nl_assertions": eval_metrics["num_nl_assertions"],
+        }
+
+    @staticmethod
+    def _sim_to_row(sim: "SimulationRun", info: "Info") -> dict:
+        return {
+            "simulation_id": sim.id,
+            "task_id": sim.task_id,
+            "trial": sim.trial,
+            "seed": sim.seed,
+            "reward": sim.reward_info.reward if sim.reward_info else None,
+            "agent_cost": sim.agent_cost,
+            "user_cost": sim.user_cost,
+            "termination_reason": sim.termination_reason,
+            "duration": sim.duration,
+            "num_messages": len(sim.get_messages()),
+            "info_git_commit": info.git_commit,
+            "info_seed": info.seed,
+            "info_num_trials": info.num_trials,
+            "info_max_steps": info.max_steps,
+            "info_max_errors": info.max_errors,
+            "info_domain": info.environment_info.domain_name,
+            "info_user_implementation": info.user_info.implementation,
+            "info_user_llm": info.user_info.llm,
+            "info_user_llm_args": info.user_info.llm_args,
+            "info_agent_implementation": info.agent_info.implementation,
+            "info_agent_llm": info.agent_info.llm,
+            "info_agent_llm_args": info.agent_info.llm_args,
+        }
 
     def to_df(self) -> pd.DataFrame:
-        """
-        Convert a Results object to a pandas DataFrame.
-        """
-
-        def transfer_only(task: Task) -> bool:
-            """
-            Check if the task is a transfer only task.
-            """
-            if task.evaluation_criteria is None:
-                return False
-            if task.evaluation_criteria.actions is None:
-                return False
-            actions = task.evaluation_criteria.actions
-            if len(actions) != 1:
-                return False
-            action = actions[0]
-            if "transfer" in action.name.lower():
-                return True
-            return False
-
-        def get_task_metrics(task: Task) -> dict:
-            eval_metrics = (
-                task.evaluation_criteria.info()
-                if task.evaluation_criteria is not None
-                else {}
-            )
-            num_actions = (
-                eval_metrics["num_agent_actions"] + eval_metrics["num_user_actions"]
-            )
-            if transfer_only(task):
-                num_actions = -1
-            info = {
-                "task_num_agent_actions": eval_metrics["num_agent_actions"],
-                "task_num_user_actions": eval_metrics["num_user_actions"],
-                "task_num_actions": num_actions,
-                "task_num_env_assertions": eval_metrics["num_env_assertions"],
-                "task_num_nl_assertions": eval_metrics["num_nl_assertions"],
-            }
-            return info
-
+        """Convert a Results object to a pandas DataFrame."""
         rows = []
         for sim in self.simulations:
-            row = {
-                "simulation_id": sim.id,
-                "task_id": sim.task_id,
-                "trial": sim.trial,
-                "seed": sim.seed,
-                "reward": sim.reward_info.reward if sim.reward_info else None,
-                "agent_cost": sim.agent_cost,
-                "user_cost": sim.user_cost,
-                "termination_reason": sim.termination_reason,
-                "duration": sim.duration,
-                "num_messages": len(sim.get_messages()),
-                "info_git_commit": self.info.git_commit,
-                "info_seed": self.info.seed,
-                "info_num_trials": self.info.num_trials,
-                "info_max_steps": self.info.max_steps,
-                "info_max_errors": self.info.max_errors,
-                "info_domain": self.info.environment_info.domain_name,
-                "info_user_implementation": self.info.user_info.implementation,
-                "info_user_llm": self.info.user_info.llm,
-                "info_user_llm_args": self.info.user_info.llm_args,
-                "info_agent_implementation": self.info.agent_info.implementation,
-                "info_agent_llm": self.info.agent_info.llm,
-                "info_agent_llm_args": self.info.agent_info.llm_args,
-            }
+            row = self._sim_to_row(sim, self.info)
             task = next(t for t in self.tasks if t.id == sim.task_id)
-            row.update(get_task_metrics(task))
+            row.update(self._task_metrics(task))
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+    @classmethod
+    def df_from_path(cls, path: Path) -> pd.DataFrame:
+        """Build a metrics DataFrame by streaming simulations from disk.
+
+        Like to_df() but loads simulations one at a time, keeping peak memory
+        bounded by the size of a single simulation. Works with both formats.
+        """
+        metadata = cls.load_metadata(path)
+        tasks_by_id = {t.id: t for t in metadata.tasks}
+        rows = []
+        for sim in cls.iter_simulations(path):
+            row = cls._sim_to_row(sim, metadata.info)
+            task = tasks_by_id.get(sim.task_id)
+            if task:
+                row.update(cls._task_metrics(task))
             rows.append(row)
         return pd.DataFrame(rows)

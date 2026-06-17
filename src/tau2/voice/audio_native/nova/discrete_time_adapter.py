@@ -32,7 +32,7 @@ Reference: https://docs.aws.amazon.com/nova/latest/nova2-userguide/sonic-getting
 import asyncio
 import base64
 import json
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from loguru import logger
 
@@ -40,17 +40,12 @@ from tau2.config import (
     DEFAULT_AUDIO_NATIVE_CONNECT_TIMEOUT,
     DEFAULT_AUDIO_NATIVE_DISCONNECT_TIMEOUT,
     DEFAULT_AUDIO_NATIVE_TICK_TIMEOUT_BUFFER,
-    DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS,
-    DEFAULT_TELEPHONY_RATE,
-    TELEPHONY_ULAW_SILENCE,
 )
 from tau2.data_model.message import ToolCall
 from tau2.environment.tool import Tool
 from tau2.voice.audio_native.adapter import DiscreteTimeAdapter
 from tau2.voice.audio_native.async_loop import BackgroundAsyncLoop
-from tau2.voice.audio_native.nova.audio_utils import (
-    StreamingNovaConverter,
-)
+from tau2.voice.audio_native.audio_converter import StreamingTelephonyConverter
 from tau2.voice.audio_native.nova.events import (
     NovaAudioOutputEvent,
     NovaBargeInEvent,
@@ -70,12 +65,9 @@ from tau2.voice.audio_native.nova.provider import (
 from tau2.voice.audio_native.tick_result import (
     TickResult,
     UtteranceTranscript,
-    buffer_excess_audio,
-    get_proportional_transcript,
 )
 
 # Telephony at 8kHz μ-law = 8000 bytes per second
-NOVA_TELEPHONY_BYTES_PER_SECOND = DEFAULT_TELEPHONY_RATE  # 8000
 
 
 class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
@@ -99,13 +91,12 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
         provider: Optional provider instance. Created lazily if not provided.
     """
 
-    VOIP_PACKET_INTERVAL_MS = DEFAULT_AUDIO_NATIVE_VOIP_PACKET_INTERVAL_MS
-
     def __init__(
         self,
         tick_duration_ms: int,
         send_audio_instant: bool = True,
         model: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
         provider: Optional[NovaSonicProvider] = None,
         voice: str = "tiffany",
     ):
@@ -116,15 +107,17 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
             send_audio_instant: If True, send audio in one call (discrete-time mode).
             model: Model to use. Defaults to None (provider default).
                 If provider is also provided, this is ignored.
+            reasoning_effort: Not supported by Nova. Must be None.
             provider: Optional provider instance. Created lazily if not provided.
             voice: Voice to use. Options: matthew, tiffany, amy. Default: tiffany.
         """
-        super().__init__(tick_duration_ms)
+        if reasoning_effort is not None:
+            raise ValueError(
+                f"Nova provider does not support reasoning_effort (got '{reasoning_effort}')"
+            )
+        super().__init__(tick_duration_ms, send_audio_instant=send_audio_instant)
 
-        self.send_audio_instant = send_audio_instant
-        self._chunk_size = int(
-            NOVA_BYTES_PER_SECOND * self.VOIP_PACKET_INTERVAL_MS / 1000
-        )
+        self._chunk_size = int(NOVA_BYTES_PER_SECOND * self._voip_interval_ms / 1000)
         self.voice = voice
 
         if model is not None and provider is not None:
@@ -137,40 +130,33 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
         self._owns_provider = provider is None
 
         # Audio format converter (preserves state for streaming)
-        self._audio_converter = StreamingNovaConverter()
+        self._audio_converter = StreamingTelephonyConverter(
+            input_sample_rate=16000,
+            output_sample_rate=24000,
+        )
 
         # Async event loop management
         self._bg_loop = BackgroundAsyncLoop()
         self._connected = False
 
-        # Tick state
-        self._tick_count = 0
-        self._cumulative_user_audio_ms = 0
-
         # Audio stream state
         self._audio_content_id: Optional[str] = None
 
-        # Buffered audio and transcripts
-        self._buffered_agent_audio: List[Tuple[bytes, Optional[str]]] = []
-        self._utterance_transcripts: dict[str, UtteranceTranscript] = {}
-        self._current_content_id: Optional[str] = None
-        self._skip_content_id: Optional[str] = None
-
-        # Nova sends TEXT before AUDIO with different content_ids
-        # Track the mapping: audio_content_id -> text_content_id
-        self._audio_to_text_map: dict[str, str] = {}
+        # Nova-specific: uses different content_ids for text vs audio
+        # _item_id_map (from base class) maps audio_content_id -> text_content_id
+        self._item_id_map = {}
         self._last_assistant_text_content_id: Optional[str] = None
 
-        # Tool result queue (for sending tool results in next tick)
-        self._pending_tool_results: List[Tuple[str, str, bool]] = []
+        # Nova uses skip_content_id instead of skip_item_id internally
+        self._skip_content_id: Optional[str] = None
+        self._current_content_id: Optional[str] = None
 
         # Background receive task and event queue
         self._receive_task: Optional[asyncio.Task] = None
-        self._event_queue: Optional[asyncio.Queue] = None  # Created in event loop
+        self._event_queue: Optional[asyncio.Queue] = None
         self._receive_active = False
 
         # Track FINAL content IDs - only process audio/text from FINAL (not SPECULATIVE)
-        # Nova Sonic uses speculative generation; we ignore speculative content
         self._final_content_ids: set[str] = set()
 
     @property
@@ -242,9 +228,8 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
         self._audio_content_id = await self.provider.start_audio_stream()
 
         # Start background receive task BEFORE sending any audio
-        # This matches the standalone test flow which works
         logger.debug("Starting background receive task...")
-        self._event_queue = asyncio.Queue()  # Create queue in the event loop
+        self._event_queue = asyncio.Queue()
         self._receive_active = True
         self._receive_task = asyncio.create_task(self._background_receive_loop())
 
@@ -252,8 +237,6 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
         await asyncio.sleep(0.1)
 
         # Send initial audio to trigger Nova's response
-        # The standalone test sends actual speech audio here - we send silence
-        # but this may need to be real audio for proper VAD triggering
         logger.debug("Sending initial silence to prime audio stream...")
         initial_silence = b"\x00" * 32000  # 1 second of 16kHz PCM16 silence
         await self.provider.send_audio(initial_silence, self._audio_content_id)
@@ -263,11 +246,10 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
     async def _background_receive_loop(self) -> None:
         """Background task that continuously receives events from Nova Sonic.
 
-        Events are placed in _event_queue for consumption by _async_run_tick.
+        Events are placed in _event_queue for consumption by _execute_tick.
         This keeps the bidirectional stream alive and responsive.
         """
         try:
-            # First, ensure output stream is ready
             if not await self.provider._ensure_output_stream():
                 logger.error("Failed to initialize output stream in background task")
                 return
@@ -278,14 +260,12 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
 
             while self._receive_active:
                 try:
-                    # Read next event (this may block at C level)
                     event_data = await self.provider._read_next_event()
 
                     if event_data is None:
                         logger.info("Background receive loop: stream ended")
                         break
 
-                    # Parse and queue the event
                     from tau2.voice.audio_native.nova.events import parse_nova_event
 
                     event = parse_nova_event(event_data)
@@ -320,9 +300,11 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
         self._tick_count = 0
         self._cumulative_user_audio_ms = 0
         self._audio_content_id = None
-        self._buffered_agent_audio.clear()
-        self._utterance_transcripts.clear()
+        self.clear_buffers()
         self._audio_converter.reset()
+        self._item_id_map.clear()
+        self._last_assistant_text_content_id = None
+        self._final_content_ids.clear()
         logger.info("DiscreteTimeNovaAdapter disconnected")
 
     async def _async_disconnect(self) -> None:
@@ -377,54 +359,35 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
             logger.error(f"Error in run_tick (tick={tick_number}): {e}")
             raise
 
-    async def _async_run_tick(self, user_audio: bytes, tick_number: int) -> TickResult:
-        """Async tick execution."""
-        # Send any pending tool results first
-        for call_id, result_str, request_response in self._pending_tool_results:
-            await self.provider.send_tool_result(call_id, result_str, request_response)
+    async def _flush_pending_tool_results(self) -> None:
+        """Send pending tool results to Nova."""
+        for (
+            call_id,
+            result_str,
+            _request_response,
+            _is_error,
+        ) in self._pending_tool_results:
+            await self.provider.send_tool_result(call_id, result_str, _request_response)
         self._pending_tool_results.clear()
 
-        # Calculate timing
-        tick_start = asyncio.get_running_loop().time()
-
-        # Create tick result
-        result = TickResult(
-            tick_number=tick_number,
-            audio_sent_bytes=len(user_audio),
-            audio_sent_duration_ms=(len(user_audio) / NOVA_TELEPHONY_BYTES_PER_SECOND)
-            * 1000,
-            user_audio_data=user_audio,
-            cumulative_user_audio_at_tick_start_ms=self._cumulative_user_audio_ms,
-            bytes_per_tick=self.bytes_per_tick,
-            bytes_per_second=NOVA_TELEPHONY_BYTES_PER_SECOND,
-            silence_byte=TELEPHONY_ULAW_SILENCE,
-        )
-
-        # Add any buffered agent audio from previous tick
-        for chunk_data, content_id in self._buffered_agent_audio:
-            result.agent_audio_chunks.append((chunk_data, content_id))
-        self._buffered_agent_audio.clear()
-
-        # Carry over skip state from previous tick
+    async def _execute_tick(
+        self,
+        user_audio: bytes,
+        tick_number: int,
+        result: TickResult,
+        tick_start: float,
+    ) -> None:
+        """Nova-specific: convert audio, send via stream, receive from queue."""
+        # Nova uses skip_content_id; sync with result's skip_item_id
         result.skip_item_id = self._skip_content_id
 
         # Convert telephony audio to Nova format (8kHz μ-law → 16kHz PCM16)
         nova_audio = self._audio_converter.convert_input(user_audio)
 
-        # Send audio and receive events concurrently
-        async def send_audio():
-            """Send audio (instant or chunked based on config)."""
-            if not nova_audio or not self._audio_content_id:
+        async def send_nova_audio(chunk: bytes) -> None:
+            if not self._audio_content_id:
                 return
-            if self.send_audio_instant:
-                await self.provider.send_audio(nova_audio, self._audio_content_id)
-            else:
-                offset = 0
-                while offset < len(nova_audio):
-                    chunk = nova_audio[offset : offset + self._chunk_size]
-                    await self.provider.send_audio(chunk, self._audio_content_id)
-                    offset += len(chunk)
-                    await asyncio.sleep(self.VOIP_PACKET_INTERVAL_MS / 1000)
+            await self.provider.send_audio(chunk, self._audio_content_id)
 
         async def receive_events():
             elapsed_so_far = asyncio.get_running_loop().time() - tick_start
@@ -442,36 +405,18 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
                     continue
             return collected
 
-        _, events = await asyncio.gather(send_audio(), receive_events())
-
-        # Process all received events
-        for event in events:
-            await self._process_event(result, event)
-
-        # Record simulation timing
-        result.tick_sim_duration_ms = result.audio_sent_duration_ms
-
-        # Move excess agent audio to buffer for next tick
-        self._buffered_agent_audio = buffer_excess_audio(result, self.bytes_per_tick)
-
-        # Calculate proportional transcript (Nova needs audio->text ID mapping)
-        result.proportional_transcript = get_proportional_transcript(
-            result.agent_audio_chunks,
-            self._utterance_transcripts,
-            item_id_map=self._audio_to_text_map,
+        _, events = await asyncio.gather(
+            self._send_audio_chunked(nova_audio, send_nova_audio, self._chunk_size),
+            receive_events(),
         )
 
-        # Update skip state for next tick
+        for event in events:
+            self._process_event(result, event)
+
+        # Sync back skip state from Nova's content_id space
         self._skip_content_id = result.skip_item_id
 
-        # Update cumulative user audio tracking
-        self._cumulative_user_audio_ms += int(result.audio_sent_duration_ms)
-
-        logger.info(f"Tick {tick_number} completed:\n{result.summary()}")
-
-        return result
-
-    async def _process_event(self, result: TickResult, event: Any) -> None:
+    def _process_event(self, result: TickResult, event: Any) -> None:
         """Process a Nova Sonic event."""
         result.events.append(event)
 
@@ -480,14 +425,12 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
 
             # Skip audio from truncated content
             if result.skip_item_id is not None and content_id == result.skip_item_id:
-                # Decode and count discarded bytes
                 audio_bytes = base64.b64decode(event.content) if event.content else b""
                 result.truncated_audio_bytes += len(audio_bytes)
                 return
 
             # Skip SPECULATIVE audio - only process FINAL content
-            # Check both the audio content_id and its mapped text content_id
-            text_content_id = self._audio_to_text_map.get(content_id, content_id)
+            text_content_id = self._item_id_map.get(content_id, content_id)
             if (
                 content_id not in self._final_content_ids
                 and text_content_id not in self._final_content_ids
@@ -500,27 +443,22 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
             # Decode base64 audio (24kHz PCM16 from Nova)
             nova_audio = base64.b64decode(event.content) if event.content else b""
             if nova_audio:
-                # Convert to telephony format (24kHz PCM16 → 8kHz μ-law)
                 telephony_audio = self._audio_converter.convert_output(nova_audio)
                 if telephony_audio:
                     result.agent_audio_chunks.append((telephony_audio, content_id))
 
             # Track for transcript distribution
-            # Use the audio->text mapping to add bytes to the correct transcript
             if content_id:
                 self._current_content_id = content_id
                 if text_content_id not in self._utterance_transcripts:
                     self._utterance_transcripts[text_content_id] = UtteranceTranscript(
                         item_id=text_content_id
                     )
-                # Track telephony bytes (what we output) on the TEXT transcript
                 self._utterance_transcripts[text_content_id].add_audio(
                     len(telephony_audio)
                 )
 
         elif isinstance(event, NovaTextOutputEvent):
-            # Only track ASSISTANT transcripts for proportional display
-            # USER textOutput events are ASR transcripts of user speech
             if event.role == "ASSISTANT":
                 content_id = event.content_id or self._current_content_id
 
@@ -539,17 +477,13 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
                     self._utterance_transcripts[content_id].add_transcript(
                         event.content
                     )
-                    # Track as most recent text content for audio->text mapping
                     self._last_assistant_text_content_id = content_id
                     logger.debug(f"Agent transcript added (FINAL): {content_id[:8]}...")
 
         elif isinstance(event, NovaContentStartEvent):
-            # Track new content block
             if event.content_id:
                 self._current_content_id = event.content_id
 
-                # Track FINAL content IDs - we only process FINAL, not SPECULATIVE
-                # Nova uses speculative generation; speculative content may be revised
                 if event.generation_stage == "FINAL":
                     self._final_content_ids.add(event.content_id)
                     logger.debug(
@@ -563,11 +497,9 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
                     )
 
                 # Nova sends TEXT before AUDIO with different content_ids
-                # Track the mapping so audio can find its transcript
                 if event.type == "AUDIO" and event.role == "ASSISTANT":
-                    # Map this audio content to the most recent text content
                     if self._last_assistant_text_content_id:
-                        self._audio_to_text_map[event.content_id] = (
+                        self._item_id_map[event.content_id] = (
                             self._last_assistant_text_content_id
                         )
                         logger.debug(
@@ -598,7 +530,6 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
             result.vad_events.append("speech_stopped")
 
         elif isinstance(event, NovaToolUseEvent):
-            # Parse arguments
             try:
                 arguments = json.loads(event.content) if event.content else {}
             except json.JSONDecodeError:
@@ -616,37 +547,7 @@ class DiscreteTimeNovaAdapter(DiscreteTimeAdapter):
             logger.debug(f"Completion done (stop_reason={event.stop_reason})")
 
         elif isinstance(event, NovaTimeoutEvent):
-            # Normal timeout, continue
             pass
 
         else:
             logger.debug(f"Event {type(event).__name__} received")
-
-    def send_tool_result(
-        self,
-        call_id: str,
-        result: str,
-        request_response: bool = True,
-        is_error: bool = False,
-    ) -> None:
-        """Queue a tool result to be sent in the next tick.
-
-        Args:
-            call_id: The tool call ID.
-            result: The tool result as a string.
-            request_response: Ignored for Nova (always continues automatically).
-            is_error: If True, the tool call failed. Currently unused by Nova.
-        """
-        self._pending_tool_results.append((call_id, result, request_response))
-        logger.debug(f"Queued tool result for call_id={call_id}")
-
-    def clear_buffers(self) -> None:
-        """Clear all internal audio and transcript buffers."""
-        self._buffered_agent_audio.clear()
-        self._utterance_transcripts.clear()
-        self._pending_tool_results.clear()
-        self._skip_content_id = None
-        self._audio_converter.reset()
-        self._audio_to_text_map.clear()
-        self._last_assistant_text_content_id = None
-        self._final_content_ids.clear()

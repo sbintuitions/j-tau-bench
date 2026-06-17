@@ -3,7 +3,7 @@ OpenAI Realtime API implementation for audio native adapters.
 """
 
 from tau2.voice.audio_native.openai.discrete_time_adapter import (
-    DiscreteTimeAudioNativeAdapter,
+    DiscreteTimeOpenAIAdapter,
 )
 from tau2.voice.audio_native.openai.events import (
     AudioDeltaEvent,
@@ -30,15 +30,11 @@ from tau2.voice.audio_native.openai.provider import (
     OpenAIVADConfig,
     OpenAIVADMode,
 )
-from tau2.voice.audio_native.openai.tick_runner import (
-    PendingUtterance,
-    TickRunner,
-)
 from tau2.voice.audio_native.tick_result import TickResult, UtteranceTranscript
 
 __all__ = [
     # Adapters
-    "DiscreteTimeAudioNativeAdapter",
+    "DiscreteTimeOpenAIAdapter",
     # Config (in provider.py)
     "OpenAIVADConfig",
     "OpenAIVADMode",
@@ -65,7 +61,5 @@ __all__ = [
     "OpenAIRealtimeProvider",
     # Tick-based simulation
     "TickResult",
-    "TickRunner",
     "UtteranceTranscript",
-    "PendingUtterance",
 ]

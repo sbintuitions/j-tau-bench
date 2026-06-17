@@ -149,6 +149,10 @@ class ConsoleDisplay:
         Normalizes turn actions into broader categories so related actions
         (like 'generate_message' and 'keep_talking') are grouped together.
 
+        When there is no agent turn action (e.g., audio-native providers that
+        don't emit turn-taking metadata), agent content presence is factored
+        into the pattern so that gaps in agent speech break groups.
+
         Args:
             info: Dictionary with tick info including agent/user turn actions and content
 
@@ -162,22 +166,33 @@ class ConsoleDisplay:
                 return "active_speech"
             return action_name
 
+        has_agent = bool(info.get("agent_content"))
+
         # Check agent turn action first
         if info.get("agent_turn_action"):
             return normalize_action(info["agent_turn_action"])
 
         # Check user turn action (may have the decision when agent action is empty)
         if info.get("user_turn_action"):
-            return normalize_action(info["user_turn_action"])
+            base = normalize_action(info["user_turn_action"])
+            # Distinguish agent-speaking vs agent-silent so that pauses in
+            # agent speech (e.g., barge-in recovery) create separate rows.
+            if has_agent:
+                return f"{base}+agent"
+            return base
 
         # No turn action - check content
-        has_agent = bool(info.get("agent_content"))
         has_user = bool(info.get("user_content"))
         if not has_agent and not has_user:
             return None  # Empty tick - can join any group
 
         # Has content but no turn action - group by whether anyone is speaking
         return "active_speech"
+
+    # Max ticks of agent silence that are absorbed into the current group
+    # rather than breaking it.  At 200ms/tick this means gaps <= 200ms are
+    # treated as continuous speech.
+    AGENT_CONTENT_GAP_TOLERANCE = 1
 
     @classmethod
     def _group_ticks_by_pattern(
@@ -190,6 +205,10 @@ class ConsoleDisplay:
 
         Empty ticks (None pattern) don't break groups - only different non-empty patterns do.
         Tool activity always breaks a group.
+
+        Short gaps in agent content (up to ``AGENT_CONTENT_GAP_TOLERANCE`` ticks)
+        are absorbed rather than splitting a group.  This avoids breaking a
+        single agent utterance into multiple rows because of a brief silence.
 
         Args:
             ticks: List of Tick objects
@@ -243,13 +262,28 @@ class ConsoleDisplay:
                     j += 1
                     continue
 
-                # Stop if pattern changes to a different non-empty pattern
-                if next_pattern != last_content_pattern:
-                    break
-
                 # Same pattern - continue grouping
-                group_infos.append(next_info)
-                j += 1
+                if next_pattern == last_content_pattern:
+                    group_infos.append(next_info)
+                    j += 1
+                    continue
+
+                # Short gap in agent content: if agent was speaking and
+                # content just dropped for ≤ AGENT_CONTENT_GAP_TOLERANCE
+                # ticks, peek ahead and absorb the gap.
+                if (
+                    last_content_pattern.endswith("+agent")
+                    and next_pattern == last_content_pattern.removesuffix("+agent")
+                    and j + 1 < len(ticks)
+                    and get_pattern(extract_tick_info(ticks[j + 1]))
+                    == last_content_pattern
+                ):
+                    group_infos.append(next_info)
+                    j += 1
+                    continue
+
+                # Different non-empty pattern — break the group
+                break
 
             end_tick = ticks[j - 1].tick_id
             groups.append((start_tick, end_tick, group_infos))
@@ -362,14 +396,14 @@ class ConsoleDisplay:
             audio_table.add_row(
                 "Wait (other):",
                 f"{anc.wait_to_respond_threshold_other_seconds}s",
-                "Fast Forward:",
-                f"{anc.fast_forward_mode}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Wait (self):",
                 f"{anc.wait_to_respond_threshold_self_seconds}s",
-                "Buffer Complete:",
-                f"{anc.buffer_until_complete}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Yield (interrupted):",
@@ -1417,14 +1451,14 @@ class ConsoleDisplay:
             audio_table.add_row(
                 "Wait (other):",
                 f"{anc.wait_to_respond_threshold_other_seconds}s",
-                "Fast Forward:",
-                f"{anc.fast_forward_mode}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Wait (self):",
                 f"{anc.wait_to_respond_threshold_self_seconds}s",
-                "Buffer Complete:",
-                f"{anc.buffer_until_complete}",
+                "",
+                "",
             )
             audio_table.add_row(
                 "Yield (interrupted):",

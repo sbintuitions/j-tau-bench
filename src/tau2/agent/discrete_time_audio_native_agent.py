@@ -45,7 +45,12 @@ from typing import TYPE_CHECKING, List, Literal, Optional, Tuple, Union
 from loguru import logger
 
 if TYPE_CHECKING:
+    from tau2.voice.audio_native.gemini.provider import GeminiVADConfig
     from tau2.voice.audio_native.livekit.config import CascadedConfig
+    from tau2.voice.audio_native.nova.provider import NovaVADConfig
+    from tau2.voice.audio_native.openai.provider import OpenAIVADConfig
+    from tau2.voice.audio_native.qwen.provider import QwenVADConfig
+    from tau2.voice.audio_native.xai.provider import XAIVADConfig
 
 from pydantic import ConfigDict, Field
 
@@ -55,8 +60,6 @@ from tau2.config import (
     AUDIO_NATIVE_PROVIDER_TYPES,
     DEFAULT_AUDIO_NATIVE_MAX_INACTIVE_SECONDS,
     DEFAULT_AUDIO_NATIVE_PROVIDER,
-    DEFAULT_BUFFER_UNTIL_COMPLETE,
-    DEFAULT_FAST_FORWARD_MODE,
     DEFAULT_OPENAI_VAD_THRESHOLD,
     DEFAULT_SEND_AUDIO_INSTANT,
 )
@@ -74,27 +77,18 @@ from tau2.data_model.message import (
 from tau2.environment.tool import Tool
 from tau2.utils.utils import get_now
 from tau2.voice.audio_native.adapter import DiscreteTimeAdapter, create_adapter
-from tau2.voice.audio_native.deepgram.provider import DeepgramVADConfig
-from tau2.voice.audio_native.gemini.provider import GeminiVADConfig
-from tau2.voice.audio_native.nova.provider import NovaVADConfig
-from tau2.voice.audio_native.openai.provider import OpenAIVADConfig, OpenAIVADMode
-from tau2.voice.audio_native.qwen.provider import QwenVADConfig
 from tau2.voice.audio_native.tick_result import TickResult
-from tau2.voice.audio_native.xai.provider import XAIVADConfig
 
 # Provider type alias
-AudioNativeProvider = Literal[
-    "openai", "gemini", "xai", "nova", "qwen", "deepgram", "livekit"
-]
+AudioNativeProvider = Literal["openai", "gemini", "xai", "nova", "qwen", "livekit"]
 
-# VAD config union type
+# VAD config union type (string annotations for lazy resolution)
 VADConfig = Union[
-    OpenAIVADConfig,
-    GeminiVADConfig,
-    XAIVADConfig,
-    NovaVADConfig,
-    QwenVADConfig,
-    DeepgramVADConfig,
+    "OpenAIVADConfig",
+    "GeminiVADConfig",
+    "XAIVADConfig",
+    "NovaVADConfig",
+    "QwenVADConfig",
 ]
 
 AUDIO_NATIVE_VOICE_INSTRUCTION = """
@@ -212,11 +206,10 @@ class DiscreteTimeAudioNativeAgent(FullDuplexAgent[DiscreteTimeAgentState]):
         audio_format: Optional[AudioFormat] = None,
         provider: AudioNativeProvider = DEFAULT_AUDIO_NATIVE_PROVIDER,
         model: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
         max_inactive_seconds: float = DEFAULT_AUDIO_NATIVE_MAX_INACTIVE_SECONDS,
         use_xml_prompt: bool = False,
         cascaded_config: Optional["CascadedConfig"] = None,
-        buffer_until_complete: bool = DEFAULT_BUFFER_UNTIL_COMPLETE,
-        fast_forward_mode: bool = DEFAULT_FAST_FORWARD_MODE,
         audio_taps_dir: Optional[Path] = None,
     ):
         """Initialize the discrete-time audio native agent.
@@ -249,23 +242,16 @@ class DiscreteTimeAudioNativeAgent(FullDuplexAgent[DiscreteTimeAgentState]):
                 Only used when provider="livekit". Ignored for other providers.
                 Can be a CascadedConfig instance or None to use defaults.
             audio_taps_dir: Directory to save audio taps. Only used when audio_taps_dir is not None.
-            buffer_until_complete: If True, wait until an utterance is complete
-                        before including its audio/text in results.
-                        Only supported by the OpenAI provider.
-            fast_forward_mode: If True, exit tick early when we have enough audio
-                buffered (>= bytes_per_tick), rather than waiting for wall-clock time.
-                Only supported by the OpenAI provider.
         """
         self.tools = tools
         self.domain_policy = domain_policy
         self.tick_duration_ms = tick_duration_ms
         self.modality = modality
         self.send_audio_instant = send_audio_instant
-        self.buffer_until_complete = buffer_until_complete
-        self.fast_forward_mode = fast_forward_mode
         self.provider = provider
         self.use_xml_prompt = use_xml_prompt
         self.model = model
+        self.reasoning_effort = reasoning_effort
         self.max_inactive_seconds = max_inactive_seconds
         self.cascaded_config = cascaded_config
 
@@ -276,30 +262,41 @@ class DiscreteTimeAudioNativeAgent(FullDuplexAgent[DiscreteTimeAgentState]):
             self.audio_format.bytes_per_second * tick_duration_ms / 1000
         )
 
-        # VAD config - defaults depend on provider
+        # VAD config - defaults depend on provider (lazy imports to avoid
+        # pulling in websockets/aiohttp when voice extras aren't installed)
         if vad_config is not None:
             self.vad_config = vad_config
         elif provider == "openai":
+            from tau2.voice.audio_native.openai.provider import (
+                OpenAIVADConfig,
+                OpenAIVADMode,
+            )
+
             self.vad_config = OpenAIVADConfig(
                 mode=OpenAIVADMode.SERVER_VAD,
                 threshold=DEFAULT_OPENAI_VAD_THRESHOLD,
             )
         elif provider == "gemini":
+            from tau2.voice.audio_native.gemini.provider import GeminiVADConfig
+
             self.vad_config = GeminiVADConfig()
         elif provider == "xai":
+            from tau2.voice.audio_native.xai.provider import XAIVADConfig
+
             self.vad_config = XAIVADConfig()
         elif provider == "qwen":
+            from tau2.voice.audio_native.qwen.provider import QwenVADConfig
+
             self.vad_config = QwenVADConfig()
-        elif provider == "deepgram":
-            self.vad_config = DeepgramVADConfig()
         elif provider == "livekit":
-            # LiveKit uses Deepgram for STT which has integrated VAD
             from tau2.voice.audio_native.livekit.discrete_time_adapter import (
                 LiveKitVADConfig,
             )
 
             self.vad_config = LiveKitVADConfig()
         else:  # nova
+            from tau2.voice.audio_native.nova.provider import NovaVADConfig
+
             self.vad_config = NovaVADConfig()
 
         # Adapter - created lazily if not provided
@@ -345,7 +342,7 @@ class DiscreteTimeAudioNativeAgent(FullDuplexAgent[DiscreteTimeAgentState]):
             else AUDIO_NATIVE_SYSTEM_PROMPT_PLAIN
         )
 
-        # Use CASCADED_MODEL_INSTRUCTION for cascaded models (e.g., deepgram)
+        # Use CASCADED_MODEL_INSTRUCTION for cascaded models (e.g., livekit)
         # which work with transcribed speech rather than native audio
         provider_type = AUDIO_NATIVE_PROVIDER_TYPES.get(self.provider, "audio_native")
         if provider_type == "cascaded":
@@ -366,9 +363,8 @@ class DiscreteTimeAudioNativeAgent(FullDuplexAgent[DiscreteTimeAgentState]):
                 provider=self.provider,
                 tick_duration_ms=self.tick_duration_ms,
                 send_audio_instant=self.send_audio_instant,
-                buffer_until_complete=self.buffer_until_complete,
-                fast_forward_mode=self.fast_forward_mode,
                 model=self.model,
+                reasoning_effort=self.reasoning_effort,
                 audio_format=self.audio_format,
                 cascaded_config=self.cascaded_config,
             )
@@ -803,8 +799,7 @@ def create_discrete_time_audio_native_agent(tools, domain_policy, **kwargs):
         **kwargs: Additional arguments. Supports:
             - audio_native_config: AudioNativeConfig with provider settings.
               If provided, the following fields are extracted from it:
-              tick_duration_ms, send_audio_instant, buffer_until_complete,
-              fast_forward_mode, provider, model, use_xml_prompt.
+              tick_duration_ms, send_audio_instant, provider, model, use_xml_prompt.
             - Individual overrides for any of the above fields.
     """
     audio_native_config = kwargs.get("audio_native_config")
@@ -816,10 +811,9 @@ def create_discrete_time_audio_native_agent(tools, domain_policy, **kwargs):
             tick_duration_ms=audio_native_config.tick_duration_ms,
             modality="audio",
             send_audio_instant=audio_native_config.send_audio_instant,
-            buffer_until_complete=audio_native_config.buffer_until_complete,
-            fast_forward_mode=audio_native_config.fast_forward_mode,
             provider=audio_native_config.provider,
             model=audio_native_config.model,
+            reasoning_effort=audio_native_config.reasoning_effort,
             use_xml_prompt=audio_native_config.use_xml_prompt,
             cascaded_config=getattr(audio_native_config, "cascaded_config", None),
             audio_taps_dir=audio_taps_dir,

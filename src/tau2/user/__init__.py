@@ -14,19 +14,20 @@ from tau2.user.user_simulator_base import (
     ValidUserInputMessage,
 )
 
-# NOTE: Commented out to run without voice extras
-# from tau2.user.user_simulator import VoiceUserSimulator
-# from tau2.user.user_simulator_streaming import VoiceStreamingUserSimulator
-
 # =============================================================================
 # DEPRECATION ALIASES
 # =============================================================================
 # These aliases maintain backward compatibility with code using old names.
 # They will emit DeprecationWarning when used.
 
+_VOICE_LAZY_IMPORTS = {
+    "VoiceUserSimulator": "tau2.user.user_simulator_voice",
+    "VoiceStreamingUserSimulator": "tau2.user.user_simulator_streaming",
+}
+
 
 def __getattr__(name: str):
-    """Module-level __getattr__ for deprecation warnings."""
+    """Module-level __getattr__ for deprecation warnings and lazy voice imports."""
     deprecated_aliases = {
         "BaseUser": ("HalfDuplexUser", HalfDuplexUser),
         "BaseStreamingUser": ("FullDuplexUser", FullDuplexUser),
@@ -41,6 +42,12 @@ def __getattr__(name: str):
             stacklevel=2,
         )
         return new_class
+
+    if name in _VOICE_LAZY_IMPORTS:
+        import importlib
+
+        module = importlib.import_module(_VOICE_LAZY_IMPORTS[name])
+        return getattr(module, name)
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -62,7 +69,7 @@ __all__ = [
     # User simulators
     "UserSimulator",
     "DummyUser",
-    # Voice users
+    # Voice users (lazy imports)
     "VoiceUserSimulator",
     "VoiceStreamingUserSimulator",
     # Deprecated aliases (kept for backward compatibility)
