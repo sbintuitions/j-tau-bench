@@ -1,6 +1,7 @@
 # J-tau: A Japanese tau-bench for Benchmarking Tool-Agent-User Interaction in Real-World Domains
 
 [![日本語 README](https://img.shields.io/badge/README-%E6%97%A5%E6%9C%AC%E8%AA%9E-red)](README.md)
+[![Tech Blog(Japanese)](https://img.shields.io/badge/Blog_(Japanese)-telecom_ja-orange)](https://www.sbintuitions.co.jp/blog/entry/2026/06/19/100154)
 
 ## Overview
 
