@@ -2,36 +2,36 @@
 plan_id = "P1001"
 name = "Basic Plan"
 data_limit_gb = 5.0
-price_per_month = 40.0
-data_refueling_price_per_gb = 5.0
+price_per_month = 6000.0
+data_refueling_price_per_gb = 750.0
 
 [[plans]]
 plan_id = "P1002"
 name = "Premium Plan"
 data_limit_gb = 15.0
-price_per_month = 65.0
-data_refueling_price_per_gb = 2.0
+price_per_month = 9750.0
+data_refueling_price_per_gb = 300.0
 
 [[plans]]
 plan_id = "P1003"
 name = "Unlimited Plus"
 data_limit_gb = 999.0
-price_per_month = 85.0
-data_refueling_price_per_gb = 0.1
+price_per_month = 12750.0
+data_refueling_price_per_gb = 15.0
 
 [[plans]]
 plan_id = "P1004"
 name = "Family Share"
 data_limit_gb = 25.0
-price_per_month = 120.0
-data_refueling_price_per_gb = 3.0
+price_per_month = 18000.0
+data_refueling_price_per_gb = 450.0
 
 [[plans]]
 plan_id = "P1005"
 name = "IoT Basic"
 data_limit_gb = 1.0
-price_per_month = 15.0
-data_refueling_price_per_gb = 10.0
+price_per_month = 2250.0
+data_refueling_price_per_gb = 1500.0
 
 [[devices]]
 device_id = "D1001"
@@ -235,7 +235,7 @@ email = "tanaka.taro@example.com"
 phone_number = "090-1234-5678"
 account_status = "有効"
 created_at = "2025-01-15T10:30:00"
-goodwill_credit_used_this_year = 25.0
+goodwill_credit_used_this_year = 3750.0
 line_ids = ["L1001", "L1002", "L1003"]
 bill_ids = ["B1001", "B1002", "B1003"]
 [[customers.payment_methods]]
@@ -285,7 +285,7 @@ email = "sato.kenichi@example.com"
 phone_number = "0120-1111-2222"
 account_status = "利用停止"
 created_at = "2024-12-05T09:45:00"
-goodwill_credit_used_this_year = 50.0
+goodwill_credit_used_this_year = 7500.0
 line_ids = ["L1009"]
 bill_ids = ["B1006"]
 [[customers.payment_methods]]
@@ -323,30 +323,30 @@ customer_id = "C1001"
 period_start = "2025-01-01"
 period_end = "2025-01-31"
 issue_date = "2025-01-05"
-total_due = 160.5
+total_due = 24075.0
 due_date = "2025-01-19"
 status = "支払い済み"
 [[bills.line_items]]
 description = "Basic Plan - 電話番号 03-1111-2222"
-amount = 40.0
+amount = 6000.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "Premium Plan - 電話番号 090-1234-5678"
-amount = 65.0
+amount = 9750.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "Basic Plan - 電話番号 03-1234-2222"
-amount = 40.0
+amount = 6000.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "データ超過 - 電話番号 090-1234-5678"
-amount = 15.5
+amount = 2325.0
 date = "2025-01-05"
 item_type = "超過料金"
 
@@ -357,30 +357,30 @@ customer_id = "C1001"
 period_start = "2025-02-01"
 period_end = "2025-02-28"
 issue_date = "2025-02-05"
-total_due = 150.0
+total_due = 22500.0
 due_date = "2025-02-19"
 status = "発行済み"
 [[bills.line_items]]
 description = "Basic Plan - 電話番号 03-1111-2222"
-amount = 40.0
+amount = 6000.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "Premium Plan - 電話番号 090-1234-5678"
-amount = 65.0
+amount = 9750.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "Basic Plan - 電話番号 03-1234-2222"
-amount = 40.0
+amount = 6000.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "利用停止手数料 - 電話番号 03-1234-2222"
-amount = 5.0
+amount = 750.0
 date = "2025-02-05"
 item_type = "手数料"
 
@@ -402,12 +402,12 @@ customer_id = "C1002"
 period_start = "2025-01-01"
 period_end = "2025-01-31"
 issue_date = "2025-01-05"
-total_due = 425.0
+total_due = 63750.0
 due_date = "2025-01-19"
 status = "支払い済み"
 [[bills.line_items]]
 description = "Unlimited Plus - 5回線ファミリープラン"
-amount = 425.0
+amount = 63750.0
 date = "2025-01-05"
 item_type = "プラン料金"
 
@@ -418,12 +418,12 @@ customer_id = "C1002"
 period_start = "2025-02-01"
 period_end = "2025-02-28"
 issue_date = "2025-02-05"
-total_due = 425.0
+total_due = 63750.0
 due_date = "2025-02-26"
 status = "延滞"
 [[bills.line_items]]
 description = "Unlimited Plus - 5回線ファミリープラン"
-amount = 425.0
+amount = 63750.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
@@ -434,17 +434,17 @@ customer_id = "C1003"
 period_start = "2025-02-01"
 period_end = "2025-02-28"
 issue_date = "2025-02-05"
-total_due = 70.0
+total_due = 10500.0
 due_date = "2025-02-19"
 status = "係争中"
 [[bills.line_items]]
 description = "Premium Plan - 電話番号 03-1111-7777"
-amount = 65.0
+amount = 9750.0
 date = "2025-02-05"
 item_type = "プラン料金"
 
 [[bills.line_items]]
 description = "利用停止手数料 - 電話番号 03-1111-7777"
-amount = 5.0
+amount = 750.0
 date = "2025-02-05"
 item_type = "手数料"

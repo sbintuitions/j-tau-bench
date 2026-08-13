@@ -50,11 +50,14 @@ For each User Turn, check if the User Simulator:
 - Followed the User instructions
 - Performed its task correctly
 - Acted consistently with previous turns
+- Maintained natural, fluent Japanese throughout (this conversation must be conducted entirely in Japanese)
 
 ### Important User Review Principles:
 1. **Fact-check every user claim**: For every factual detail the user provides (names, emails, zip codes, sizes, colors, product descriptions, etc.), verify it appears in or is derivable from the <User Instructions>. Any detail not grounded in the instructions is a hallucination — even if it sounds plausible. When the user lacks information, the correct behavior is to say "I don't know" or ask the agent.
 
 2. **Do not blame the user for agent failures**: If the agent is unresponsive, repeatedly fails, or makes critical errors, the user giving up or ending the conversation is a reasonable reaction — not a user error. Only flag premature_termination when the agent was actively working and making progress.
+
+3. **Check Japanese language consistency**: This conversation is expected to take place entirely in natural Japanese. Flag any turn where the speaker switches to another language (e.g., English), mixes languages inappropriately, or produces unnatural/machine-translated-sounding Japanese.
 
 ### User Error Severity:
 For each user error, classify its severity:
@@ -67,6 +70,7 @@ For each Agent Turn, check if the Agent:
 - Followed the Policy
 - Correctly performed its task
 - Acted consistently with previous turns
+- Maintained natural, fluent Japanese throughout (this conversation must be conducted entirely in Japanese)
 
 ### Agent Error Severity:
 For each agent error, classify its severity:
@@ -86,6 +90,7 @@ For each error, assign one or more tags from the following list:
 - **premature_termination**: Ended the conversation or accepted an incomplete outcome while the other participant was actively working and making progress. Do NOT use this tag if the user ended the conversation because the agent was unresponsive or repeatedly failing.
 - **missed_required_action**: Did not take a required action that was expected.
 - **wrong_sequence**: Performed actions out of the expected order or sequence.
+- **language_deviation**: Failed to maintain natural, fluent Japanese — e.g., switched to English or another language, mixed languages inappropriately, or produced unnatural/machine-translated-sounding Japanese.
 - **other**: Use only when no other tag applies. Include a description of the error type in the reasoning.
 
 ### Workflow
@@ -93,7 +98,7 @@ Follow these steps to produce your analysis:
 
 1. **Fact-check user claims**: Verify every factual claim the user makes against the <User Instructions>.
 
-2. **Analyze each turn**: Go through the conversation turn by turn. For each turn, check if the message contains an error based on the guidelines above. Note any errors you find.
+2. **Analyze each turn**: Go through the conversation turn by turn. For each turn, check if the message contains an error based on the guidelines above, including whether Japanese was maintained naturally throughout. Note any errors you find.
 
 3. **Assess context for termination**: If the user ended the conversation early, only flag premature_termination if the agent was actively making progress (not stalled or failing).
 
@@ -203,11 +208,14 @@ For each User segment, check if the User Simulator:
 - Followed the User instructions
 - Performed its task correctly
 - Acted consistently with previous segments
+- Maintained natural, fluent Japanese throughout (this conversation must be conducted entirely in Japanese)
 
 ### Important User Review Principles:
 1. **Fact-check every user claim**: For every factual detail the user provides (names, emails, zip codes, sizes, colors, product descriptions, etc.), verify it appears in or is derivable from the <User Instructions>. Any detail not grounded in the instructions is a hallucination — even if it sounds plausible. When the user lacks information, the correct behavior is to say "I don't know" or ask the agent.
 
 2. **Do not blame the user for agent failures**: If the agent is unresponsive, repeatedly fails, or makes critical errors, the user giving up or ending the conversation is a reasonable reaction — not a user error. Only flag premature_termination when the agent was actively working and making progress.
+
+3. **Check Japanese language consistency**: This conversation is expected to take place entirely in natural Japanese. Flag any segment where the speaker switches to another language (e.g., English), mixes languages inappropriately, or produces unnatural/machine-translated-sounding Japanese.
 
 ### User Errors (Turn-Taking, only if interruption is enabled):
 - Interrupts the agent too frequently or unnecessarily
@@ -227,6 +235,7 @@ For each Agent segment, check if the Agent:
 - Followed the Policy
 - Correctly performed its task
 - Acted consistently with previous segments
+- Maintained natural, fluent Japanese throughout (this conversation must be conducted entirely in Japanese)
 
 ### Agent Error Severity:
 For each agent error, classify its severity:
@@ -247,6 +256,7 @@ For each error, assign one or more tags from the following list:
 - **missed_required_action**: Did not take a required action that was expected.
 - **wrong_sequence**: Performed actions out of the expected order or sequence.
 - **interruption_error**: Interrupted inappropriately or failed to interrupt when appropriate (only for full-duplex with interruption enabled).
+- **language_deviation**: Failed to maintain natural, fluent Japanese — e.g., switched to English or another language, mixed languages inappropriately, or produced unnatural/machine-translated-sounding Japanese.
 - **other**: Use only when no other tag applies. Include a description of the error type in the reasoning.
 
 ### Workflow
@@ -254,7 +264,7 @@ Follow these steps to produce your analysis:
 
 1. **Fact-check user claims**: Verify every factual claim the user makes against the <User Instructions>.
 
-2. **Analyze each segment**: Go through the conversation segment by segment. For each segment, check if it contains an error based on the guidelines above. Note any errors you find.
+2. **Analyze each segment**: Go through the conversation segment by segment. For each segment, check if it contains an error based on the guidelines above, including whether Japanese was maintained naturally throughout. Note any errors you find.
 
 3. **Assess context for termination**: If the user ended the conversation early, only flag premature_termination if the agent was actively making progress (not stalled or failing).
 

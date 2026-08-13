@@ -41,12 +41,15 @@ A user simulator error occurs when a user message:
 - Is not a natural or correct continuation of the conversation.
 - Provides incorrect information that contradicts the <User Instructions>.
 - Reveals information the user should not know according to the instructions.
+- Fails to maintain natural, fluent Japanese (this conversation must be conducted entirely in Japanese).
 
 ## Important Review Principles
 
 1. **Fact-check every user claim**: For every factual detail the user provides (names, emails, zip codes, sizes, colors, product descriptions, etc.), verify it appears in or is derivable from the <User Instructions>. Any detail not grounded in the instructions is a hallucination — even if it sounds plausible. When the user lacks information, the correct behavior is to say "I don't know" or ask the agent.
 
 2. **Do not blame the user for agent failures**: If the agent is unresponsive, repeatedly fails, or makes critical errors, the user giving up or ending the conversation is a reasonable reaction — not a user error. Only flag premature_termination when the agent was actively working and making progress.
+
+3. **Check Japanese language consistency**: This conversation is expected to take place entirely in natural Japanese. Flag any user message that switches to another language (e.g., English), mixes languages inappropriately, or produces unnatural/machine-translated-sounding Japanese.
 
 
 ## Error Severity
@@ -65,6 +68,7 @@ For each error, assign one or more tags from the following list:
 - **premature_termination**: Ended the conversation or accepted an incomplete outcome while the agent was actively working and making progress. Do NOT use this tag if the user ended the conversation because the agent was unresponsive or repeatedly failing.
 - **missed_required_action**: Did not take a required action that was expected.
 - **wrong_sequence**: Performed actions out of the expected order or sequence.
+- **language_deviation**: Failed to maintain natural, fluent Japanese — e.g., switched to English or another language, mixed languages inappropriately, or produced unnatural/machine-translated-sounding Japanese.
 - **other**: Use only when no other tag applies. Include a description of the error type in the reasoning.
 
 ## Workflow
@@ -72,7 +76,7 @@ Follow these steps to produce your analysis:
 
 1. **Fact-check user claims**: Verify every factual claim the user makes against the <User Instructions>.
 
-2. **Analyze each user message**: Go through the conversation message by message. For each user message, check if it contains an error based on the guidelines above. Note any errors you find.
+2. **Analyze each user message**: Go through the conversation message by message. For each user message, check if it contains an error based on the guidelines above, including whether Japanese was maintained naturally throughout. Note any errors you find.
 
 3. **Assess context for termination**: If the user ended the conversation early, only flag premature_termination if the agent was actively making progress (not stalled or failing).
 
@@ -149,12 +153,15 @@ Review the entire conversation. Identify ALL errors where the user simulator:
 - Is not a natural or correct continuation of the conversation.
 - Provides incorrect information that contradicts the <User Instructions>.
 - Reveals information the user should not know according to the instructions.
+- Fails to maintain natural, fluent Japanese (this conversation must be conducted entirely in Japanese).
 
 ## Important Review Principles
 
 1. **Fact-check every user claim**: For every factual detail the user provides (names, emails, zip codes, sizes, colors, product descriptions, etc.), verify it appears in or is derivable from the <User Instructions>. Any detail not grounded in the instructions is a hallucination — even if it sounds plausible. When the user lacks information, the correct behavior is to say "I don't know" or ask the agent.
 
 2. **Do not blame the user for agent failures**: If the agent is unresponsive, repeatedly fails, or makes critical errors, the user giving up or ending the conversation is a reasonable reaction — not a user error. Only flag premature_termination when the agent was actively working and making progress.
+
+3. **Check Japanese language consistency**: This conversation is expected to take place entirely in natural Japanese. Flag any segment where the user switches to another language (e.g., English), mixes languages inappropriately, or produces unnatural/machine-translated-sounding Japanese.
 
 
 ## Turn-Taking/Interruption Errors (only if interruption is enabled):
@@ -183,6 +190,7 @@ For each error, assign one or more tags from the following list:
 - **missed_required_action**: Did not take a required action that was expected.
 - **wrong_sequence**: Performed actions out of the expected order or sequence.
 - **interruption_error**: Interrupted inappropriately or failed to interrupt when appropriate (only for full-duplex with interruption enabled).
+- **language_deviation**: Failed to maintain natural, fluent Japanese — e.g., switched to English or another language, mixed languages inappropriately, or produced unnatural/machine-translated-sounding Japanese.
 - **other**: Use only when no other tag applies. Include a description of the error type in the reasoning.
 
 ## Workflow
@@ -190,7 +198,7 @@ Follow these steps to produce your analysis:
 
 1. **Fact-check user claims**: Verify every factual claim the user makes against the <User Instructions>.
 
-2. **Analyze each user segment**: Go through the conversation segment by segment. For each user segment, check if it contains an error based on the guidelines above. Note any errors you find.
+2. **Analyze each user segment**: Go through the conversation segment by segment. For each user segment, check if it contains an error based on the guidelines above, including whether Japanese was maintained naturally throughout. Note any errors you find.
 
 3. **Assess context for termination**: If the user ended the conversation early, only flag premature_termination if the agent was actively making progress (not stalled or failing).
 

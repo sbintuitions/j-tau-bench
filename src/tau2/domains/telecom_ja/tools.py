@@ -291,7 +291,7 @@ class TelecomTools(ToolKitBase):
         logger.info(f"Line {line_id} suspended. Reason: {reason}")
 
         return {
-            "message": "回線を利用停止にしました。月額 $5 の保留手数料が適用されます。",
+            "message": "回線を利用停止にしました。月額 750円 の保留手数料が適用されます。",
             "line": target_line,
         }
 
@@ -647,15 +647,15 @@ class TelecomTools(ToolKitBase):
         self._apply_one_time_charge(
             customer_id,
             charge_amount,
-            f"データチャージ: {gb_amount} GB（${plan.data_refueling_price_per_gb}/GB）",
+            f"データチャージ: {gb_amount} GB（{plan.data_refueling_price_per_gb:,.0f}円/GB）",
         )
 
         logger.info(
-            f"Data refueled for line {line_id}: {gb_amount} GB added, charge: ${charge_amount:.2f}"
+            f"Data refueled for line {line_id}: {gb_amount} GB added, charge: ¥{charge_amount:,.0f}"
         )
 
         return {
-            "message": f"回線 {line_id} に {gb_amount} GB のデータを追加しました（料金: ${charge_amount:.2f}）。",
+            "message": f"回線 {line_id} に {gb_amount} GB のデータを追加しました（料金: {charge_amount:,.0f}円）。",
             "new_data_refueling_gb": target_line.data_refueling_gb,
             "charge": charge_amount,
         }

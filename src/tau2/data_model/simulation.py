@@ -840,9 +840,11 @@ class UserOnlyReviewError(BaseModel):
         description="Tags classifying the error. Must have at least one tag.",
         default_factory=list,
     )
-    severity: Optional[Literal["minor", "critical"]] = Field(
-        description="Severity of user error: 'critical' if it influenced the outcome, 'minor' otherwise.",
-        default=None,
+    severity: Optional[Literal["minor", "critical_helped", "critical_hindered"]] = (
+        Field(
+            description="Severity of user error: 'critical_helped' (helped agent inappropriately), 'critical_hindered' (made task harder/impossible), 'minor' (no impact).",
+            default=None,
+        )
     )
     reasoning: str = Field(description="Explanation of why this is an error.")
     user_message: Optional[str] = Field(

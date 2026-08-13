@@ -313,7 +313,7 @@ class PaymentRequest(BaseModelNoExtra):
     """Represents a payment made by the user."""
 
     bill_id: str = Field(description="The ID of the bill.")
-    amount_due: float = Field(description="The amount of the payment in USD.")
+    amount_due: float = Field(description="The amount of the payment in JPY.")
     paid: bool = Field(description="Whether the payment has been made.", default=False)
 
 
