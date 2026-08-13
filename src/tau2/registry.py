@@ -23,6 +23,13 @@ from tau2.domains.airline.environment import get_tasks as airline_domain_get_tas
 from tau2.domains.airline.environment import (
     get_tasks_split as airline_domain_get_tasks_split,
 )
+from tau2.domains.airline_ja.environment import (
+    get_environment as airline_ja_domain_get_environment,
+)
+from tau2.domains.airline_ja.environment import get_tasks as airline_ja_domain_get_tasks
+from tau2.domains.airline_ja.environment import (
+    get_tasks_split as airline_ja_domain_get_tasks_split,
+)
 # NOTE: Commented out to run without voice extras
 # from tau2.domains.banking_knowledge.environment import (
 #     get_environment as knowledge_domain_get_environment,
@@ -38,6 +45,13 @@ from tau2.domains.retail.environment import (
 from tau2.domains.retail.environment import get_tasks as retail_domain_get_tasks
 from tau2.domains.retail.environment import (
     get_tasks_split as retail_domain_get_tasks_split,
+)
+from tau2.domains.retail_ja.environment import (
+    get_environment as retail_ja_domain_get_environment,
+)
+from tau2.domains.retail_ja.environment import get_tasks as retail_ja_domain_get_tasks
+from tau2.domains.retail_ja.environment import (
+    get_tasks_split as retail_ja_domain_get_tasks_split,
 )
 from tau2.domains.telecom.environment import (
     get_environment_manual_policy as telecom_domain_get_environment_manual_policy,
@@ -339,11 +353,25 @@ try:
         get_task_splits=airline_domain_get_tasks_split,
     )
 
+    registry.register_domain(airline_ja_domain_get_environment, "airline_ja")
+    registry.register_tasks(
+        airline_ja_domain_get_tasks,
+        "airline_ja",
+        get_task_splits=airline_ja_domain_get_tasks_split,
+    )
+
     registry.register_domain(retail_domain_get_environment, "retail")
     registry.register_tasks(
         retail_domain_get_tasks,
         "retail",
         get_task_splits=retail_domain_get_tasks_split,
+    )
+
+    registry.register_domain(retail_ja_domain_get_environment, "retail_ja")
+    registry.register_tasks(
+        retail_ja_domain_get_tasks,
+        "retail_ja",
+        get_task_splits=retail_ja_domain_get_tasks_split,
     )
 
     registry.register_domain(telecom_domain_get_environment_manual_policy, "telecom")

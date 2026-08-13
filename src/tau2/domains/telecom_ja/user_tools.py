@@ -1062,7 +1062,7 @@ class TelecomUserTools(ToolKitBase):
         payment_request = self._check_payment_request()
         if payment_request is None:
             return "支払いリクエストはありません。"
-        return f"請求書 {payment_request.bill_id} に対する {payment_request.amount_due} USD の支払いリクエストがあります。"
+        return f"請求書 {payment_request.bill_id} に対する {payment_request.amount_due:,.0f}円 の支払いリクエストがあります。"
 
     def _check_payment_request(self) -> Optional[PaymentRequest]:
         """
@@ -1090,7 +1090,7 @@ class TelecomUserTools(ToolKitBase):
         if payment_request is None:
             return None
         payment_request.paid = True
-        return f"請求書 {payment_request.bill_id} に対する {payment_request.amount_due} USD の支払いが完了しました。"
+        return f"請求書 {payment_request.bill_id} に対する {payment_request.amount_due:,.0f}円 の支払いが完了しました。"
 
     # --- Assertion Methods ---
     def assert_airplane_mode_status(self, expected_status: bool) -> bool:

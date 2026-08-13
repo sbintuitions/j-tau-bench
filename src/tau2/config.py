@@ -1,3 +1,5 @@
+import os
+
 # =============================================================================
 # SIMULATION DEFAULTS (overridable via CLI)
 # =============================================================================
@@ -21,9 +23,18 @@ DEFAULT_LLM_TEMPERATURE_USER = 0.0
 DEFAULT_LLM_ARGS_AGENT = {"temperature": DEFAULT_LLM_TEMPERATURE_AGENT}
 DEFAULT_LLM_ARGS_USER = {"temperature": DEFAULT_LLM_TEMPERATURE_USER}
 
-DEFAULT_LLM_NL_ASSERTIONS = "gpt-4.1-2025-04-14"
-DEFAULT_LLM_NL_ASSERTIONS_TEMPERATURE = 0.0
-DEFAULT_LLM_NL_ASSERTIONS_ARGS = {"temperature": DEFAULT_LLM_NL_ASSERTIONS_TEMPERATURE}
+DEFAULT_LLM_NL_ASSERTIONS = os.environ.get(
+    "TAU2_NL_ASSERTIONS_MODEL", "hosted_vllm/gpt-oss-120b"
+)
+if DEFAULT_LLM_NL_ASSERTIONS.startswith("hosted_vllm/"):
+    # Self-hosted vLLM server (e.g. gpt-oss-120b). Port/host configurable via env var.
+    DEFAULT_LLM_NL_ASSERTIONS_API_BASE = os.environ.get(
+        "TAU2_NL_ASSERTIONS_API_BASE", "http://localhost:8000/v1"
+    )
+    DEFAULT_LLM_NL_ASSERTIONS_ARGS = {"api_base": DEFAULT_LLM_NL_ASSERTIONS_API_BASE}
+else:
+    # Hosted model (e.g. gpt-4.1-2025-04-14) - no local server needed.
+    DEFAULT_LLM_NL_ASSERTIONS_ARGS = {"temperature": 0.0}
 
 DEFAULT_LLM_ENV_INTERFACE = "gpt-4.1-2025-04-14"
 DEFAULT_LLM_ENV_INTERFACE_TEMPERATURE = 0.0

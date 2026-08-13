@@ -22,7 +22,7 @@ class Plan(BaseModelNoExtra):
     plan_id: str = Field(description="Unique identifier for the plan")
     name: str = Field(description="Display name of the plan")
     data_limit_gb: float = Field(description="Monthly data allowance in gigabytes (GB)")
-    price_per_month: float = Field(description="Monthly price of the plan in USD")
+    price_per_month: float = Field(description="Monthly price of the plan in JPY")
     data_refueling_price_per_gb: float = Field(
         description="Price per gigabyte for data refueling"
     )
@@ -106,7 +106,7 @@ class Line(BaseModelNoExtra):
 class LineItem(BaseModelNoExtra):
     description: str = Field(description="Descriptive text for the line item")
     amount: float = Field(
-        description="Monetary amount in USD (positive for charges, negative for credits)"
+        description="Monetary amount in JPY (positive for charges, negative for credits)"
     )
     date: datetime.date = Field(
         description="Date the line item was applied (format: YYYY-MM-DD, timezone: EST)"
@@ -137,7 +137,7 @@ class Bill(BaseModelNoExtra):
     issue_date: datetime.date = Field(
         description="Date the bill was issued/generated (format: YYYY-MM-DD, timezone: EST)"
     )
-    total_due: float = Field(description="Total amount due in USD")
+    total_due: float = Field(description="Total amount due in JPY")
     due_date: datetime.date = Field(
         description="Date by which payment is due (format: YYYY-MM-DD, timezone: EST)"
     )

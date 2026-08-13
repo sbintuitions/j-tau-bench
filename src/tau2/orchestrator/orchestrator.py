@@ -282,6 +282,23 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
             result = self._finalize()
             finalized = True
             return result
+        except (AgentError, UserError) as e:
+            # agent/user 起因の失敗はインフラ障害と区別し、例外を上に投げず
+            # 採点対象の SimulationRun として返す(リトライなし、reward は通常どおり評価)。
+            # 違反したメッセージは trajectory に含まれない。
+            logger.warning(
+                f"Participant error, terminating simulation as scored failure: {e}"
+            )
+            self.done = True
+            if self.termination_reason is None:
+                self.termination_reason = (
+                    TerminationReason.AGENT_ERROR
+                    if isinstance(e, AgentError)
+                    else TerminationReason.USER_ERROR
+                )
+            result = self._finalize()
+            finalized = True
+            return result
         finally:
             if not finalized:
                 logger.warning(
@@ -665,6 +682,35 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
             self.check_communication_error()
         self.environment.sync_tools()
 
+    _PARTICIPANT_FAULT_FINISH_REASONS = ("stop", "content_filter")
+
+    @classmethod
+    def _validate_participant_message(
+        cls, message: Message, exception_type: type[Exception]
+    ) -> None:
+        """発話直後のメッセージを検証し、空メッセージを finish_reason で分類して raise する。
+
+        - stop / content_filter / None(raw_data 無し): モデルが自力で応答を
+          作れなかった=発話者の失敗。AgentError / UserError として raise され、
+          AGENT_ERROR / USER_ERROR で採点対象に入る(リトライなし)。
+          content_filter は安全フィルタ込みで「そのモデル」の応答能力とみなす。
+        - それ以外(length、abort 等の未知値): リトライ→infrastructure_error として扱われる
+        """
+        try:
+            message.validate()
+        except ValueError as e:
+            finish_reason = None
+            raw = getattr(message, "raw_data", None) or {}
+            choices = raw.get("choices") or []
+            if choices:
+                finish_reason = choices[0].get("finish_reason")
+            if (
+                finish_reason is not None
+                and finish_reason not in cls._PARTICIPANT_FAULT_FINISH_REASONS
+            ):
+                raise ValueError(f"{e} (finish_reason={finish_reason})") from e
+            raise exception_type(f"{e} (finish_reason={finish_reason})") from e
+
     def check_communication_error(self) -> None:
         """
         Check the orchestrator state for communication errors and handle them appropriately.
@@ -838,10 +884,16 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
         )
         # AGENT/ENV -> USER
         if self.from_role in [Role.AGENT, Role.ENV] and self.to_role == Role.USER:
-            user_msg, self.user_state = self.user.generate_next_message(
-                self.message, self.user_state
-            )
-            user_msg.validate()
+            try:
+                user_msg, self.user_state = self.user.generate_next_message(
+                    self.message, self.user_state
+                )
+            except json.JSONDecodeError as e:
+                # tool call 引数の JSON 破損は発話者自身の出力不良(採点対象・リトライなし)
+                raise UserError(
+                    f"user returned a tool call with unparsable arguments: {e}"
+                ) from e
+            self._validate_participant_message(user_msg, UserError)
             if UserSimulator.is_stop(user_msg):
                 self.done = True
                 self.termination_reason = TerminationReason.USER_STOP
@@ -859,10 +911,16 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
         elif (
             self.from_role == Role.USER or self.from_role == Role.ENV
         ) and self.to_role == Role.AGENT:
-            agent_msg, self.agent_state = self.agent.generate_next_message(
-                self.message, self.agent_state
-            )
-            agent_msg.validate()
+            try:
+                agent_msg, self.agent_state = self.agent.generate_next_message(
+                    self.message, self.agent_state
+                )
+            except json.JSONDecodeError as e:
+                # tool call 引数の JSON 破損は発話者自身の出力不良(採点対象・リトライなし)
+                raise AgentError(
+                    f"agent returned a tool call with unparsable arguments: {e}"
+                ) from e
+            self._validate_participant_message(agent_msg, AgentError)
             if self.agent.is_stop(agent_msg):
                 self.done = True
                 self.termination_reason = TerminationReason.AGENT_STOP

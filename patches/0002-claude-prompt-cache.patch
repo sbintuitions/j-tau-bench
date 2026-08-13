@@ -1,0 +1,24 @@
+diff --git a/src/tau2/utils/llm_utils.py b/src/tau2/utils/llm_utils.py
+index e9d8156..f433663 100644
+--- a/src/tau2/utils/llm_utils.py
++++ b/src/tau2/utils/llm_utils.py
+@@ -204,7 +204,9 @@ def to_litellm_messages(messages: list[Message]) -> list[dict]:
+                 }
+             )
+         elif isinstance(message, SystemMessage):
+-            litellm_messages.append({"role": "system", "content": message.content})
++            entry = {"role": "system", "content": message.content}
++            entry["cache_control"] = {"type": "ephemeral"}
++            litellm_messages.append(entry)
+     return litellm_messages
+ 
+ 
+@@ -387,6 +389,8 @@ def generate(
+ 
+     litellm_messages = to_litellm_messages(messages)
+     tools_schema = [tool.openai_schema for tool in tools] if tools else None
++    if tools_schema:
++        tools_schema[-1]["cache_control"] = {"type": "ephemeral"}
+     if tools_schema and tool_choice is None:
+         tool_choice = "auto"
+ 
