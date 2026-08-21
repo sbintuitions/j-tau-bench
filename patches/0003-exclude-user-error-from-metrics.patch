@@ -1,0 +1,312 @@
+diff --git a/src/tau2/data_model/simulation.py b/src/tau2/data_model/simulation.py
+index edc805e..003a2a1 100644
+--- a/src/tau2/data_model/simulation.py
++++ b/src/tau2/data_model/simulation.py
+@@ -1244,6 +1244,12 @@ class TerminationReason(str, Enum):
+     UNEXPECTED_ERROR = "unexpected_error"
+ 
+ 
++EXCLUDED_TERMINATION_REASONS = (
++    TerminationReason.INFRASTRUCTURE_ERROR,
++    TerminationReason.USER_ERROR,
++)
++
++
+ class SimulationRun(BaseModel):
+     """
+     Simulation run for the given task.
+diff --git a/src/tau2/metrics/agent_metrics.py b/src/tau2/metrics/agent_metrics.py
+index f6959b0..409c047 100644
+--- a/src/tau2/metrics/agent_metrics.py
++++ b/src/tau2/metrics/agent_metrics.py
+@@ -6,7 +6,11 @@ import pandas as pd
+ from loguru import logger
+ from pydantic import BaseModel
+ 
+-from tau2.data_model.simulation import Results, TerminationReason
++from tau2.data_model.simulation import (
++    EXCLUDED_TERMINATION_REASONS,
++    Results,
++    TerminationReason,
++)
+ 
+ 
+ def is_successful(reward: float) -> bool:
+@@ -26,6 +30,7 @@ class AgentMetrics(BaseModel):
+     total_simulations: int = 0
+     total_tasks: int = 0
+     infra_error_count: int = 0
++    user_error_count: int = 0
+ 
+     # Action metrics
+     total_read_actions: int = 0
+@@ -50,6 +55,7 @@ class AgentMetrics(BaseModel):
+     termination_max_steps: int = 0
+     termination_error: int = 0
+     termination_infrastructure_error: int = 0
++    termination_user_error: int = 0
+ 
+     # Responsiveness metrics (from full-duplex/streaming mode)
+     sims_with_unresponsive_period: int = 0
+@@ -104,6 +110,7 @@ class AgentMetrics(BaseModel):
+             "total_simulations": self.total_simulations,
+             "total_tasks": self.total_tasks,
+             "infra_error_count": self.infra_error_count,
++            "user_error_count": self.user_error_count,
+         }
+         for k, v in self.pass_hat_ks.items():
+             data[f"pass_hat_{k}"] = v
+@@ -129,7 +136,8 @@ def pass_hat_k(num_trials: int, success_count: int, k: int) -> float:
+ def get_metrics_df(results: Results) -> tuple[pd.DataFrame, int]:
+     """
+     Convert the results to a dataframe and add a column for success.
+-    Filters out infrastructure errors (simulations that never ran).
++    Filters out simulations that cannot be attributed to the agent
++    (infrastructure errors and user simulator errors).
+     Checks that all simulations have the same number of trials.
+     Returns the maximum number of trials that can be used for pass^k metrics.
+     """
+@@ -142,7 +150,15 @@ def get_metrics_df(results: Results) -> tuple[pd.DataFrame, int]:
+         logger.warning(
+             f"Excluding {infra_count} infrastructure error simulation(s) from metrics."
+         )
+-        df = df[df.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR]
++
++    user_error_count = (df.termination_reason == TerminationReason.USER_ERROR).sum()
++    if user_error_count > 0:
++        logger.warning(
++            f"Excluding {user_error_count} user error simulation(s) from metrics."
++        )
++
++    if infra_count > 0 or user_error_count > 0:
++        df = df[~df.termination_reason.isin(EXCLUDED_TERMINATION_REASONS)]
+ 
+     if df.empty:
+         df["success"] = pd.Series(dtype=bool)
+@@ -219,10 +235,15 @@ def compute_metrics(results: Results) -> AgentMetrics:
+         for sim in results.simulations
+         if sim.termination_reason == TerminationReason.INFRASTRUCTURE_ERROR
+     )
++    user_error_count = sum(
++        1
++        for sim in results.simulations
++        if sim.termination_reason == TerminationReason.USER_ERROR
++    )
+     evaluated_sims = [
+         sim
+         for sim in results.simulations
+-        if sim.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR
++        if sim.termination_reason not in EXCLUDED_TERMINATION_REASONS
+     ]
+ 
+     if not evaluated_sims:
+@@ -233,6 +254,7 @@ def compute_metrics(results: Results) -> AgentMetrics:
+             total_simulations=0,
+             total_tasks=0,
+             infra_error_count=infra_error_count,
++            user_error_count=user_error_count,
+         )
+ 
+     df, df_pass_hat_k = prepare_dfs(results)
+@@ -330,8 +352,8 @@ def compute_metrics(results: Results) -> AgentMetrics:
+         elif sim.termination_reason in (
+             TerminationReason.TOO_MANY_ERRORS,
+             TerminationReason.AGENT_ERROR,
+-            TerminationReason.USER_ERROR,
+         ):
++            # USER_ERROR は evaluated_sims から除外済みのためここには来ない。
+             termination_error += 1
+ 
+         # Responsiveness info (from full-duplex/streaming mode)
+@@ -450,6 +472,7 @@ def compute_metrics(results: Results) -> AgentMetrics:
+         total_simulations=total_simulations,
+         total_tasks=total_tasks,
+         infra_error_count=infra_error_count,
++        user_error_count=user_error_count,
+         total_read_actions=total_read_actions,
+         correct_read_actions=correct_read_actions,
+         total_write_actions=total_write_actions,
+@@ -466,6 +489,7 @@ def compute_metrics(results: Results) -> AgentMetrics:
+         termination_max_steps=termination_max_steps,
+         termination_error=termination_error,
+         termination_infrastructure_error=infra_error_count,
++        termination_user_error=user_error_count,
+         sims_with_unresponsive_period=sims_with_unresponsive_period,
+         sims_with_responsiveness_info=sims_with_responsiveness_info,
+         agent_errors_by_severity=dict(agent_errors_by_severity),
+diff --git a/src/tau2/runner/checkpoint.py b/src/tau2/runner/checkpoint.py
+index 2b4f04b..8957438 100644
+--- a/src/tau2/runner/checkpoint.py
++++ b/src/tau2/runner/checkpoint.py
+@@ -14,17 +14,18 @@ import json
+ import multiprocessing
+ import os
+ import tempfile
++from collections import Counter
+ from pathlib import Path
+ from typing import Callable, Literal, Optional
+ 
+ from loguru import logger
+ 
+ from tau2.data_model.simulation import (
++    EXCLUDED_TERMINATION_REASONS,
+     SIMULATIONS_DIR,
+     Results,
+     SimulationIndexEntry,
+     SimulationRun,
+-    TerminationReason,
+ )
+ from tau2.utils.display import ConsoleDisplay, Text
+ from tau2.utils.pydantic_utils import get_pydantic_hash
+@@ -160,25 +161,31 @@ def try_resume(
+             f"Adding {len(added_task_ids)} new tasks to the run: {sorted(added_task_ids)}"
+         )
+ 
+-    # Determine completed runs (exclude infrastructure failures for retry)
+-    infra_error_sim_ids = [
++    # Determine completed runs. Simulations that cannot be attributed to the agent
++    # (infrastructure errors and user simulator errors) are retried instead of kept.
++    retryable_sim_ids = [
+         sim.id
+         for sim in prev_simulation_results.simulations
+-        if sim.termination_reason == TerminationReason.INFRASTRUCTURE_ERROR
++        if sim.termination_reason in EXCLUDED_TERMINATION_REASONS
+     ]
+     done_runs = set(
+         [
+             (sim.trial, sim.task_id, sim.seed)
+             for sim in prev_simulation_results.simulations
+-            if sim.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR
++            if sim.termination_reason not in EXCLUDED_TERMINATION_REASONS
+         ]
+     )
+-    # Remove infrastructure failure simulations so they can be replaced
+-    infra_error_count = len(infra_error_sim_ids)
++    # Remove them so they can be replaced
++    retryable_count = len(retryable_sim_ids)
++    retryable_reason_counts = Counter(
++        sim.termination_reason.value
++        for sim in prev_simulation_results.simulations
++        if sim.termination_reason in EXCLUDED_TERMINATION_REASONS
++    )
+     prev_simulation_results.simulations = [
+         sim
+         for sim in prev_simulation_results.simulations
+-        if sim.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR
++        if sim.termination_reason not in EXCLUDED_TERMINATION_REASONS
+     ]
+ 
+     # Merge tasks: keep previous tasks and add any new ones
+@@ -191,15 +198,15 @@ def try_resume(
+         )
+         tasks = prev_simulation_results.tasks
+ 
+-    # Re-save checkpoint if anything changed (infra errors removed or tasks added)
++    # Re-save checkpoint if anything changed (retryable sims removed or tasks added)
+     # so that the on-disk state stays in sync with the in-memory state.
+-    if added_task_ids or infra_error_count > 0:
++    if added_task_ids or retryable_count > 0:
+         if fmt == "dir":
+-            for sim_id in infra_error_sim_ids:
++            for sim_id in retryable_sim_ids:
+                 sim_file = sims_dir / f"{sim_id}.json"
+                 if sim_file.exists():
+                     sim_file.unlink()
+-            # Rebuild index after removing infra-error sims
++            # Rebuild index after removing the retryable sims
+             prev_simulation_results.simulation_index = (
+                 prev_simulation_results._build_simulation_index()
+             )
+@@ -209,10 +216,14 @@ def try_resume(
+                 fp.write(prev_simulation_results.model_dump_json(indent=2))
+         if added_task_ids:
+             logger.info(f"Updated results file with {len(added_task_ids)} new tasks")
+-        if infra_error_count > 0:
++        if retryable_count > 0:
++            breakdown = ", ".join(
++                f"{reason}: {count}"
++                for reason, count in sorted(retryable_reason_counts.items())
++            )
+             logger.info(
+-                f"Removed {infra_error_count} infrastructure error simulation(s) "
+-                "from checkpoint for retry"
++                f"Removed {retryable_count} simulation(s) from checkpoint for retry "
++                f"({breakdown})"
+             )
+ 
+     console_text = Text(
+diff --git a/src/tau2/scripts/view_simulations.py b/src/tau2/scripts/view_simulations.py
+index a533334..363c024 100644
+--- a/src/tau2/scripts/view_simulations.py
++++ b/src/tau2/scripts/view_simulations.py
+@@ -117,7 +117,8 @@ def display_simulation_list(
+         TerminationReason.MAX_STEPS: "yellow",
+         TerminationReason.TOO_MANY_ERRORS: "red",
+         TerminationReason.AGENT_ERROR: "red",
+-        TerminationReason.USER_ERROR: "red",
++        TerminationReason.USER_ERROR: "magenta",
++        TerminationReason.INFRASTRUCTURE_ERROR: "bright_black",
+     }
+ 
+     termination_icon_map = {
+@@ -126,7 +127,8 @@ def display_simulation_list(
+         TerminationReason.MAX_STEPS: "⏱",
+         TerminationReason.TOO_MANY_ERRORS: "💥",
+         TerminationReason.AGENT_ERROR: "💥",
+-        TerminationReason.USER_ERROR: "💥",
++        TerminationReason.USER_ERROR: "🚫",
++        TerminationReason.INFRASTRUCTURE_ERROR: "🔌",
+     }
+ 
+     for i, sim in filtered_sims:
+diff --git a/src/tau2/utils/display.py b/src/tau2/utils/display.py
+index 397892f..3c91110 100644
+--- a/src/tau2/utils/display.py
++++ b/src/tau2/utils/display.py
+@@ -1060,13 +1060,20 @@ class ConsoleDisplay:
+ 
+         # Overview section
+         table.add_row("[cyan]═══ Overview ═══[/]", "")
+-        if metrics.infra_error_count > 0:
+-            total_with_infra = metrics.total_simulations + metrics.infra_error_count
+-            table.add_row("Total Simulations", str(total_with_infra))
+-            table.add_row(
+-                "⚠️  Infra Errors",
+-                f"[red]{metrics.infra_error_count}[/] (excluded from metrics below)",
+-            )
++        excluded_count = metrics.infra_error_count + metrics.user_error_count
++        if excluded_count > 0:
++            total_with_excluded = metrics.total_simulations + excluded_count
++            table.add_row("Total Simulations", str(total_with_excluded))
++            if metrics.infra_error_count > 0:
++                table.add_row(
++                    "⚠️  Infra Errors",
++                    f"[red]{metrics.infra_error_count}[/] (excluded from metrics below)",
++                )
++            if metrics.user_error_count > 0:
++                table.add_row(
++                    "⚠️  User Errors",
++                    f"[magenta]{metrics.user_error_count}[/] (excluded from metrics below)",
++                )
+             table.add_row("Evaluated", str(metrics.total_simulations))
+         else:
+             table.add_row("Total Simulations", str(metrics.total_simulations))
+@@ -1168,11 +1175,16 @@ class ConsoleDisplay:
+         if metrics.termination_max_steps > 0:
+             table.add_row("⏱️  Max Steps", f"[yellow]{metrics.termination_max_steps}[/]")
+         if metrics.termination_error > 0:
+-            table.add_row("💥 Error", f"[red]{metrics.termination_error}[/]")
++            table.add_row("💥 Agent Error", f"[red]{metrics.termination_error}[/]")
++        if metrics.termination_user_error > 0:
++            table.add_row(
++                "🚫 User Error",
++                f"[magenta]{metrics.termination_user_error}[/] (excluded)",
++            )
+         if metrics.termination_infrastructure_error > 0:
+             table.add_row(
+                 "🔌 Infra Error",
+-                f"[red]{metrics.termination_infrastructure_error}[/]",
++                f"[red]{metrics.termination_infrastructure_error}[/] (excluded)",
+             )
+         table.add_row("", "")
+ 

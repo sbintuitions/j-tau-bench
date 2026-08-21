@@ -137,6 +137,7 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
         self.num_errors: int = 0
         self._run_start_time: Optional[str] = None
         self._run_start_perf: Optional[float] = None
+        self._participant_error: Optional[Exception] = None
 
     @abstractmethod
     def initialize(self) -> None:
@@ -290,6 +291,7 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
                 f"Participant error, terminating simulation as scored failure: {e}"
             )
             self.done = True
+            self._participant_error = e
             if self.termination_reason is None:
                 self.termination_reason = (
                     TerminationReason.AGENT_ERROR
@@ -682,7 +684,7 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
             self.check_communication_error()
         self.environment.sync_tools()
 
-    _PARTICIPANT_FAULT_FINISH_REASONS = ("stop", "content_filter")
+    _PARTICIPANT_FAULT_FINISH_REASONS = ("stop", "content_filter", "length")
 
     @classmethod
     def _validate_participant_message(
@@ -690,11 +692,10 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
     ) -> None:
         """発話直後のメッセージを検証し、空メッセージを finish_reason で分類して raise する。
 
-        - stop / content_filter / None(raw_data 無し): モデルが自力で応答を
-          作れなかった=発話者の失敗。AgentError / UserError として raise され、
-          AGENT_ERROR / USER_ERROR で採点対象に入る(リトライなし)。
-          content_filter は安全フィルタ込みで「そのモデル」の応答能力とみなす。
-        - それ以外(length、abort 等の未知値): リトライ→infrastructure_error として扱われる
+        - stop / content_filter / length: そのモデルの出力特性とみなし、
+          AgentError / UserError として採点対象に入れる(リトライなし)。
+        - None やその他の未知値: 発話者の責任と判断する材料が無いため、
+          ValueError でリトライ→infrastructure_error に回す。
         """
         try:
             message.validate()
@@ -704,10 +705,7 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
             choices = raw.get("choices") or []
             if choices:
                 finish_reason = choices[0].get("finish_reason")
-            if (
-                finish_reason is not None
-                and finish_reason not in cls._PARTICIPANT_FAULT_FINISH_REASONS
-            ):
+            if finish_reason not in cls._PARTICIPANT_FAULT_FINISH_REASONS:
                 raise ValueError(f"{e} (finish_reason={finish_reason})") from e
             raise exception_type(f"{e} (finish_reason={finish_reason})") from e
 
@@ -849,6 +847,13 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
         ):
             speech_environment = self.user.voice_settings.speech_environment
 
+        info = None
+        if self._participant_error is not None:
+            info = {
+                "error": str(self._participant_error),
+                "error_type": type(self._participant_error).__name__,
+            }
+
         simulation_run = SimulationRun(
             id=self.simulation_id,
             task_id=self.task.id,
@@ -863,6 +868,7 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
             seed=self.seed,
             mode=self.mode.value,
             speech_environment=speech_environment,
+            info=info,
         )
         return simulation_run
 

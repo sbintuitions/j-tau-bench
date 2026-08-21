@@ -1,8 +1,16 @@
 diff --git a/src/tau2/orchestrator/orchestrator.py b/src/tau2/orchestrator/orchestrator.py
-index eaf9537..6ec423a 100644
+index eaf9537..629043b 100644
 --- a/src/tau2/orchestrator/orchestrator.py
 +++ b/src/tau2/orchestrator/orchestrator.py
-@@ -282,6 +282,24 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
+@@ -137,6 +137,7 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
+         self.num_errors: int = 0
+         self._run_start_time: Optional[str] = None
+         self._run_start_perf: Optional[float] = None
++        self._participant_error: Optional[Exception] = None
+ 
+     @abstractmethod
+     def initialize(self) -> None:
+@@ -282,6 +283,25 @@ class BaseOrchestrator(ABC, Generic[BaseAgentT, BaseUserT, TrajectoryItemT]):
              result = self._finalize()
              finalized = True
              return result
@@ -15,6 +23,7 @@ index eaf9537..6ec423a 100644
 +                f"Participant error, terminating simulation as scored failure: {e}"
 +            )
 +            self.done = True
++            self._participant_error = e
 +            if self.termination_reason is None:
 +                self.termination_reason = (
 +                    TerminationReason.AGENT_ERROR
@@ -27,11 +36,11 @@ index eaf9537..6ec423a 100644
          finally:
              if not finalized:
                  logger.warning(
-@@ -665,6 +683,37 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
+@@ -665,6 +685,31 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
              self.check_communication_error()
          self.environment.sync_tools()
  
-+    _PARTICIPANT_FAULT_FINISH_REASONS = ("stop", "content_filter")
++    _PARTICIPANT_FAULT_FINISH_REASONS = ("stop", "content_filter", "length")
 +
 +    @classmethod
 +    def _validate_participant_message(
@@ -39,13 +48,10 @@ index eaf9537..6ec423a 100644
 +    ) -> None:
 +        """Validate a freshly generated message, classifying empty messages by finish_reason.
 +
-+        - stop / content_filter / None (no raw_data): the model failed to
-+          produce a response on its own — the speaker's fault. Raised as
-+          AgentError / UserError, so the run is scored with
-+          AGENT_ERROR / USER_ERROR (no retry). content_filter counts as part
-+          of "that model's" response capability, safety filter included.
-+        - Anything else (length, abort, unknown values): re-raised so it is
-+          retried and treated as an infrastructure error.
++        - stop / content_filter / length: treated as that model's own output
++          behaviour, raised as AgentError / UserError and scored (no retry).
++        - None or any unknown value: there is no basis for blaming the speaker,
++          so raise ValueError to retry and fall back to infrastructure_error.
 +        """
 +        try:
 +            message.validate()
@@ -55,17 +61,36 @@ index eaf9537..6ec423a 100644
 +            choices = raw.get("choices") or []
 +            if choices:
 +                finish_reason = choices[0].get("finish_reason")
-+            if (
-+                finish_reason is not None
-+                and finish_reason not in cls._PARTICIPANT_FAULT_FINISH_REASONS
-+            ):
++            if finish_reason not in cls._PARTICIPANT_FAULT_FINISH_REASONS:
 +                raise ValueError(f"{e} (finish_reason={finish_reason})") from e
 +            raise exception_type(f"{e} (finish_reason={finish_reason})") from e
 +
      def check_communication_error(self) -> None:
          """
          Check the orchestrator state for communication errors and handle them appropriately.
-@@ -838,10 +887,17 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
+@@ -803,6 +848,13 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
+         ):
+             speech_environment = self.user.voice_settings.speech_environment
+ 
++        info = None
++        if self._participant_error is not None:
++            info = {
++                "error": str(self._participant_error),
++                "error_type": type(self._participant_error).__name__,
++            }
++
+         simulation_run = SimulationRun(
+             id=self.simulation_id,
+             task_id=self.task.id,
+@@ -817,6 +869,7 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
+             seed=self.seed,
+             mode=self.mode.value,
+             speech_environment=speech_environment,
++            info=info,
+         )
+         return simulation_run
+ 
+@@ -838,10 +891,17 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
          )
          # AGENT/ENV -> USER
          if self.from_role in [Role.AGENT, Role.ENV] and self.to_role == Role.USER:
@@ -87,7 +112,7 @@ index eaf9537..6ec423a 100644
              if UserSimulator.is_stop(user_msg):
                  self.done = True
                  self.termination_reason = TerminationReason.USER_STOP
-@@ -859,10 +915,17 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
+@@ -859,10 +919,17 @@ class Orchestrator(BaseOrchestrator[AgentT, UserT, Message]):
          elif (
              self.from_role == Role.USER or self.from_role == Role.ENV
          ) and self.to_role == Role.AGENT:
