@@ -25,6 +25,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCHES=(
   "${SCRIPT_DIR}/0001-orchestrator-error-classification.patch"
   "${SCRIPT_DIR}/0002-claude-prompt-cache.patch"
+  "${SCRIPT_DIR}/0003-exclude-user-error-from-metrics.patch"
+  "${SCRIPT_DIR}/0004-nl-assertions-config.patch"
+  "${SCRIPT_DIR}/0005-user-review-critical-severity.patch"
 )
 
 for p in "${PATCHES[@]}"; do

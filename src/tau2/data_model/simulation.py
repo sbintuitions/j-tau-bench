@@ -1246,6 +1246,12 @@ class TerminationReason(str, Enum):
     UNEXPECTED_ERROR = "unexpected_error"
 
 
+EXCLUDED_TERMINATION_REASONS = (
+    TerminationReason.INFRASTRUCTURE_ERROR,
+    TerminationReason.USER_ERROR,
+)
+
+
 class SimulationRun(BaseModel):
     """
     Simulation run for the given task.

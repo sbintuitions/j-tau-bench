@@ -1060,13 +1060,20 @@ class ConsoleDisplay:
 
         # Overview section
         table.add_row("[cyan]═══ Overview ═══[/]", "")
-        if metrics.infra_error_count > 0:
-            total_with_infra = metrics.total_simulations + metrics.infra_error_count
-            table.add_row("Total Simulations", str(total_with_infra))
-            table.add_row(
-                "⚠️  Infra Errors",
-                f"[red]{metrics.infra_error_count}[/] (excluded from metrics below)",
-            )
+        excluded_count = metrics.infra_error_count + metrics.user_error_count
+        if excluded_count > 0:
+            total_with_excluded = metrics.total_simulations + excluded_count
+            table.add_row("Total Simulations", str(total_with_excluded))
+            if metrics.infra_error_count > 0:
+                table.add_row(
+                    "⚠️  Infra Errors",
+                    f"[red]{metrics.infra_error_count}[/] (excluded from metrics below)",
+                )
+            if metrics.user_error_count > 0:
+                table.add_row(
+                    "⚠️  User Errors",
+                    f"[magenta]{metrics.user_error_count}[/] (excluded from metrics below)",
+                )
             table.add_row("Evaluated", str(metrics.total_simulations))
         else:
             table.add_row("Total Simulations", str(metrics.total_simulations))
@@ -1168,11 +1175,16 @@ class ConsoleDisplay:
         if metrics.termination_max_steps > 0:
             table.add_row("⏱️  Max Steps", f"[yellow]{metrics.termination_max_steps}[/]")
         if metrics.termination_error > 0:
-            table.add_row("💥 Error", f"[red]{metrics.termination_error}[/]")
+            table.add_row("💥 Agent Error", f"[red]{metrics.termination_error}[/]")
+        if metrics.termination_user_error > 0:
+            table.add_row(
+                "🚫 User Error",
+                f"[magenta]{metrics.termination_user_error}[/] (excluded)",
+            )
         if metrics.termination_infrastructure_error > 0:
             table.add_row(
                 "🔌 Infra Error",
-                f"[red]{metrics.termination_infrastructure_error}[/]",
+                f"[red]{metrics.termination_infrastructure_error}[/] (excluded)",
             )
         table.add_row("", "")
 

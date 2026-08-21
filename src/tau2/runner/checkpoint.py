@@ -14,17 +14,18 @@ import json
 import multiprocessing
 import os
 import tempfile
+from collections import Counter
 from pathlib import Path
 from typing import Callable, Literal, Optional
 
 from loguru import logger
 
 from tau2.data_model.simulation import (
+    EXCLUDED_TERMINATION_REASONS,
     SIMULATIONS_DIR,
     Results,
     SimulationIndexEntry,
     SimulationRun,
-    TerminationReason,
 )
 from tau2.utils.display import ConsoleDisplay, Text
 from tau2.utils.pydantic_utils import get_pydantic_hash
@@ -160,25 +161,31 @@ def try_resume(
             f"Adding {len(added_task_ids)} new tasks to the run: {sorted(added_task_ids)}"
         )
 
-    # Determine completed runs (exclude infrastructure failures for retry)
-    infra_error_sim_ids = [
+    # Determine completed runs. Simulations that cannot be attributed to the agent
+    # (infrastructure errors and user simulator errors) are retried instead of kept.
+    retryable_sim_ids = [
         sim.id
         for sim in prev_simulation_results.simulations
-        if sim.termination_reason == TerminationReason.INFRASTRUCTURE_ERROR
+        if sim.termination_reason in EXCLUDED_TERMINATION_REASONS
     ]
     done_runs = set(
         [
             (sim.trial, sim.task_id, sim.seed)
             for sim in prev_simulation_results.simulations
-            if sim.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR
+            if sim.termination_reason not in EXCLUDED_TERMINATION_REASONS
         ]
     )
-    # Remove infrastructure failure simulations so they can be replaced
-    infra_error_count = len(infra_error_sim_ids)
+    # Remove them so they can be replaced
+    retryable_count = len(retryable_sim_ids)
+    retryable_reason_counts = Counter(
+        sim.termination_reason.value
+        for sim in prev_simulation_results.simulations
+        if sim.termination_reason in EXCLUDED_TERMINATION_REASONS
+    )
     prev_simulation_results.simulations = [
         sim
         for sim in prev_simulation_results.simulations
-        if sim.termination_reason != TerminationReason.INFRASTRUCTURE_ERROR
+        if sim.termination_reason not in EXCLUDED_TERMINATION_REASONS
     ]
 
     # Merge tasks: keep previous tasks and add any new ones
@@ -191,15 +198,15 @@ def try_resume(
         )
         tasks = prev_simulation_results.tasks
 
-    # Re-save checkpoint if anything changed (infra errors removed or tasks added)
+    # Re-save checkpoint if anything changed (retryable sims removed or tasks added)
     # so that the on-disk state stays in sync with the in-memory state.
-    if added_task_ids or infra_error_count > 0:
+    if added_task_ids or retryable_count > 0:
         if fmt == "dir":
-            for sim_id in infra_error_sim_ids:
+            for sim_id in retryable_sim_ids:
                 sim_file = sims_dir / f"{sim_id}.json"
                 if sim_file.exists():
                     sim_file.unlink()
-            # Rebuild index after removing infra-error sims
+            # Rebuild index after removing the retryable sims
             prev_simulation_results.simulation_index = (
                 prev_simulation_results._build_simulation_index()
             )
@@ -209,10 +216,14 @@ def try_resume(
                 fp.write(prev_simulation_results.model_dump_json(indent=2))
         if added_task_ids:
             logger.info(f"Updated results file with {len(added_task_ids)} new tasks")
-        if infra_error_count > 0:
+        if retryable_count > 0:
+            breakdown = ", ".join(
+                f"{reason}: {count}"
+                for reason, count in sorted(retryable_reason_counts.items())
+            )
             logger.info(
-                f"Removed {infra_error_count} infrastructure error simulation(s) "
-                "from checkpoint for retry"
+                f"Removed {retryable_count} simulation(s) from checkpoint for retry "
+                f"({breakdown})"
             )
 
     console_text = Text(
