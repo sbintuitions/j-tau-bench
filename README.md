@@ -1,6 +1,7 @@
-# J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains
+# J-tau: A Fully Localized Japanese Benchmark for Tool-Agent-User Interaction
 
 [![English README](https://img.shields.io/badge/README-English-blue)](README_EN.md)
+[![pre-print](https://img.shields.io/badge/arXiv-2610.19638-b31b1b)](https://arxiv.org/abs/2610.19638)
 [![テックブログ](https://img.shields.io/badge/Blog-telecom_ja-orange)](https://www.sbintuitions.co.jp/blog/entry/2026/06/19/100154)
 
 ## 概要
@@ -125,12 +126,11 @@ tau-bench は [MIT ライセンス](https://github.com/sierra-research/tau-bench
 ## 引用
 
 ```
-@misc{j-tau-2026,
-  author       = {Chihiro, Yano and Jun, Hirako and Ryota, Hirobuchi},
-  title    = {J-tau: A Japanese tau-bench for Benchmarking　Tool-Agent-User Interaction in Real-World Domains},
-  url = {https://github.com/sbintuitions/j-tau-bench},
-  howpublished = {\url{https://github.com/sbintuitions/j-tau-bench}},
-  year     = {2026},
-  version  = {v202606}
+@article{j-tau-2026,
+  title={J-tau: A Fully Localized Japanese Benchmark for Tool-Agent-User Interaction}, 
+  author={Chihiro Yano and Jun Hirako and Hiroaki Yamagiwa and Ryota Hirobuchi},
+  year= {2026},
+  url={https://arxiv.org/abs/2610.19638}, 
+  journal={{arXiv preprint arXiv:2610.19638}},
 }
 ```

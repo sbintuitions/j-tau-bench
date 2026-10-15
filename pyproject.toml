@@ -3,15 +3,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tau2"
-version = "1.0.0"
-description = "tau-bench: Benchmarking tool-agent-user interaction in real-world domains"
+name = "J-tau"
+version = "0.2.1"
+description = "J-tau: A Fully Localized Japanese Benchmark for Tool-Agent-User Interaction"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Victor Barres", email = "victor.barres@gmail.com" },
-    { name = "Honghua Dong", email = "dhh19951@gmail.com" }
+    { name = "Chihiro Yano", email = "chihiro.yano@sbintuitions.co.jp" },
+    { name = "Jun Hirako", email = "jun.hirako@sbintuitions.co.jp" },
+    { name = "Hiroaki Yamagiwa", email = "hiroaki.yamagiwa@sbintuitions.co.jp" },
+    { name = "Ryota Hirobuchi", email = "ryota.hirobuchi@sbintuitions.co.jp" },
 ]
 dependencies = [
     "rich",
@@ -75,11 +77,11 @@ experiments = [
     "scikit-learn>=1.6.1",
 ]
 all = [
-    "tau2[voice,knowledge,gym,dev,experiments]",
+    "J-tau[knowledge,gym,dev,experiments]",
 ]
-[project.urls]
-Homepage = "https://taubench.com/"
-Repository = "https://github.com/sierra-research/tau2-bench"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tau2"]
 
 [project.scripts]
 tau2 = "tau2.cli:main"
